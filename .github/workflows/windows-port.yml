@@ -38,10 +38,10 @@ jobs:
       - name: Package executable ZIP
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist\AIUsage-Windows | Out-Null
-          Copy-Item dist\AIUsage-Windows.exe dist\AIUsage-Windows\AIUsage.exe
-          Copy-Item ..\docs\WINDOWS.md dist\AIUsage-Windows\WINDOWS.md
-          Compress-Archive -Path dist\AIUsage-Windows\* -DestinationPath AIUsage-Windows.zip -Force
+          New-Item -ItemType Directory -Force -Path package\AIUsage-Windows | Out-Null
+          Copy-Item windows-web\dist\AIUsage-Windows.exe package\AIUsage-Windows\AIUsage.exe
+          Copy-Item docs\WINDOWS.md package\AIUsage-Windows\WINDOWS.md
+          Compress-Archive -Path package\AIUsage-Windows\* -DestinationPath AIUsage-Windows.zip -Force
       - name: Upload Windows ZIP
         uses: actions/upload-artifact@v6
         with:
