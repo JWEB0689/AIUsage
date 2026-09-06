@@ -32,7 +32,7 @@ $stagedBinary = Join-Path $stagingDir "AIUsage.exe"
 $zipPath = Join-Path $distDir "AIUsage-win64.zip"
 if (Test-Path $stagingDir) { Remove-Item $stagingDir -Recurse -Force }
 New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
-Copy-Item -Path $binary.FullName -Destination $stagedBinary -Force
+Copy-Item -Path $binary -Destination $stagedBinary -Force
 
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path $stagedBinary -DestinationPath $zipPath -Force
