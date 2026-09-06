@@ -3,7 +3,9 @@ name: Windows Release
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
+      - jweb0689-windows-port
     paths:
       - 'QuotaBackend/**'
       - 'scripts/build-windows-quotaserver.ps1'
