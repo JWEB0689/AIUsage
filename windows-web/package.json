@@ -6,6 +6,16 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "validate": "node --check server.mjs && node --check public/app.js"
+    "validate": "node --check server.mjs && node --check public/app.js",
+    "build:windows": "pkg . --targets node22-win-x64 --output ../dist/AIUsage-Windows.exe"
+  },
+  "bin": "server.mjs",
+  "pkg": {
+    "assets": [
+      "public/**/*"
+    ]
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.10.2"
   }
 }

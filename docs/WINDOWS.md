@@ -1,31 +1,40 @@
 # Windows port
 
 The native application is SwiftUI/macOS-only. This repository now includes a
-self-contained Windows-compatible dashboard in `windows-web/`. It runs on
-Windows, macOS, and Linux with Node.js 18 or newer and does not require
-third-party packages.
+self-contained Windows-compatible dashboard in `windows-web/`. The packaged
+Windows deliverable is a standalone `.exe` with an embedded Node.js runtime;
+end users do not need to install Node.js.
 
 ## Run locally
 
-1. Install [Node.js](https://nodejs.org/) 18 or newer.
-2. Double-click `windows-web/start-aiusage.cmd`.
-3. The dashboard opens at `http://127.0.0.1:4173`.
+1. Download `AIUsage-Windows.zip` from the GitHub Actions artifact.
+2. Extract the ZIP. It contains `AIUsage.exe` and this documentation.
+3. Double-click `AIUsage.exe`. The local dashboard opens automatically at
+   `http://127.0.0.1:4173`.
+
+For development without the packaged executable, install [Node.js](https://nodejs.org/)
+18 or newer and double-click `windows-web/start-aiusage.cmd`.
 
 The Windows dashboard provides a useful local baseline: provider tracking,
 monthly spend and token summaries, sample data, and JSON import/export. Data
 is stored in browser local storage. It deliberately does not handle provider
 credentials or claim feature parity with the macOS app.
 
-## Build the Windows artifact
+## Build the Windows executable
 
-From PowerShell:
+From PowerShell or a Windows terminal:
 
 ```powershell
-node --check windows-web/server.mjs
-node --check windows-web/public/app.js
-Compress-Archive -Path windows-web -DestinationPath AIUsage-Windows.zip -Force
+cd windows-web
+npm install
+npm run build:windows
 ```
 
-The `Windows Port` GitHub Actions workflow runs the checks and publishes the
-zip as a build artifact. A future native Windows client can replace the
-dashboard while keeping this launcher and packaging contract.
+The `Windows Port` GitHub Actions workflow runs the checks, builds
+`dist/AIUsage-Windows.exe`, renames the packaged binary to `AIUsage.exe`,
+and uploads `AIUsage-Windows.zip` containing that executable. A separate
+artifact contains the standalone executable as well.
+
+The executable is a local dashboard rather than native feature parity with the
+macOS app: provider credentials, proxy management, menu-bar controls, and
+macOS Keychain integrations are not included.

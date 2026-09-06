@@ -29,12 +29,28 @@ jobs:
       - name: Validate dashboard
         working-directory: windows-web
         run: npm run validate
-      - name: Package Windows dashboard
+      - name: Install packager
+        working-directory: windows-web
+        run: npm install
+      - name: Build Windows executable
+        working-directory: windows-web
+        run: npm run build:windows
+      - name: Package executable ZIP
         shell: pwsh
-        run: Compress-Archive -Path windows-web -DestinationPath AIUsage-Windows.zip -Force
-      - name: Upload Windows artifact
+        run: |
+          New-Item -ItemType Directory -Force -Path dist\AIUsage-Windows | Out-Null
+          Copy-Item dist\AIUsage-Windows.exe dist\AIUsage-Windows\AIUsage.exe
+          Copy-Item ..\docs\WINDOWS.md dist\AIUsage-Windows\WINDOWS.md
+          Compress-Archive -Path dist\AIUsage-Windows\* -DestinationPath AIUsage-Windows.zip -Force
+      - name: Upload Windows ZIP
         uses: actions/upload-artifact@v6
         with:
           name: AIUsage-Windows
           path: AIUsage-Windows.zip
+          if-no-files-found: error
+      - name: Upload standalone executable
+        uses: actions/upload-artifact@v6
+        with:
+          name: AIUsage-Windows-exe
+          path: windows-web/dist/AIUsage-Windows.exe
           if-no-files-found: error

@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,5 +44,12 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(port, "127.0.0.1", () => {
-  console.log(`AIUsage Windows dashboard: http://127.0.0.1:${port}`);
+  const url = `http://127.0.0.1:${port}`;
+  console.log(`AIUsage Windows dashboard: ${url}`);
+  if (process.platform === "win32" && process.env.AIUSAGE_NO_BROWSER !== "1") {
+    spawn("cmd.exe", ["/c", "start", "", url], {
+      detached: true,
+      stdio: "ignore",
+    }).unref();
+  }
 });
