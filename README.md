@@ -134,7 +134,7 @@ Universal Binary — runs natively on both Apple Silicon and Intel Macs (macOS 1
 
 ## Windows build
 
-This repository now includes a portable Windows executable target alongside the macOS app. Build it locally with PowerShell:
+This repository now includes a portable Windows executable target alongside the macOS app. The Windows deliverable is a self-contained .NET executable and can be built locally with PowerShell:
 
 ```powershell
 pwsh ./scripts/build-windows-quotaserver.ps1

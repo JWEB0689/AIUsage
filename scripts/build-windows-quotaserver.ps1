@@ -15,24 +15,18 @@ $distDir = Join-Path $repoRoot "dist"
 $stagingDir = Join-Path $distDir "AIUsage-windows"
 New-Item -ItemType Directory -Path $distDir -Force | Out-Null
 
-Write-Host "Building AIUsageWindowsCLI ($Configuration)"
-& swift build --package-path $packageRoot -c $Configuration --product AIUsageWindowsCLI
+Write-Host "Building AIUsage Windows app ($Configuration)"
+$publishDir = Join-Path $packageRoot ".windows-publish"
+if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
+& dotnet publish (Join-Path $repoRoot "WindowsApp/AIUsage.csproj") `
+    --configuration $Configuration `
+    --runtime win-x64 `
+    --self-contained true `
+    --output $publishDir
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$searchRoot = Join-Path $packageRoot ".build"
-$binary = Get-ChildItem -Path $searchRoot -Recurse -Filter "AIUsageWindowsCLI*.exe" |
-    Sort-Object LastWriteTimeUtc -Descending |
-    Select-Object -First 1
-
-if (-not $binary) {
-    $binary = Get-ChildItem -Path $searchRoot -Recurse -Filter "AIUsageWindowsCLI" |
-        Sort-Object LastWriteTimeUtc -Descending |
-        Select-Object -First 1
-}
-
-if (-not $binary) {
-    throw "AIUsageWindowsCLI executable was not produced; check the Swift build output."
-}
+$binary = Join-Path $publishDir "AIUsage.exe"
+if (-not (Test-Path $binary)) { throw "AIUsage.exe was not produced; check the .NET publish output." }
 
 $stagedBinary = Join-Path $stagingDir "AIUsage.exe"
 $zipPath = Join-Path $distDir "AIUsage-win64.zip"
@@ -43,5 +37,6 @@ Copy-Item -Path $binary.FullName -Destination $stagedBinary -Force
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path $stagedBinary -DestinationPath $zipPath -Force
 Remove-Item $stagingDir -Recurse -Force
+Remove-Item $publishDir -Recurse -Force
 
 Write-Host "Windows package created: $zipPath"
