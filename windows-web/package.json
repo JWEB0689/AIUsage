@@ -1,0 +1,11 @@
+{
+  "name": "aiusage-windows",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cross-platform AIUsage dashboard for Windows and other desktop platforms",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "validate": "node --check server.mjs && node --check public/app.js"
+  }
+}

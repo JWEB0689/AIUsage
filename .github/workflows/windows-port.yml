@@ -1,0 +1,40 @@
+name: Windows Port
+
+on:
+  push:
+    paths:
+      - "windows-web/**"
+      - "docs/WINDOWS.md"
+      - ".github/workflows/windows-port.yml"
+  pull_request:
+    paths:
+      - "windows-web/**"
+      - "docs/WINDOWS.md"
+      - ".github/workflows/windows-port.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Validate dashboard
+        working-directory: windows-web
+        run: npm run validate
+      - name: Package Windows dashboard
+        shell: pwsh
+        run: Compress-Archive -Path windows-web -DestinationPath AIUsage-Windows.zip -Force
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: AIUsage-Windows
+          path: AIUsage-Windows.zip
+          if-no-files-found: error

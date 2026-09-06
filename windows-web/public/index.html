@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <title>AIUsage Windows dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">AIUsage</p>
+        <h1>Usage dashboard</h1>
+      </div>
+      <div class="actions">
+        <button id="exportButton" class="secondary">Export data</button>
+        <label class="secondary file-button">Import data<input id="importInput" type="file" accept="application/json"></label>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div>
+        <span class="pill">Windows-compatible preview</span>
+        <h2>One place for your AI subscriptions.</h2>
+        <p>Track providers and monthly usage locally in your browser. Data stays on this device.</p>
+      </div>
+      <div class="hero-mark">AI</div>
+    </section>
+
+    <section class="stats" aria-label="Summary">
+      <article><span>Providers</span><strong id="providerCount">0</strong></article>
+      <article><span>Monthly spend</span><strong id="monthlySpend">$0.00</strong></article>
+      <article><span>Tokens used</span><strong id="tokenCount">0</strong></article>
+    </section>
+
+    <section class="content-grid">
+      <div class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">Connected services</p><h3>Providers</h3></div><button id="addButton" class="primary">Add provider</button></div>
+        <div id="providerList" class="provider-list"></div>
+      </div>
+      <aside class="panel quick-start">
+        <p class="eyebrow">Quick start</p>
+        <h3>Bring your data with you</h3>
+        <p>Add a provider to begin. The Windows port intentionally uses local browser storage and never asks for API keys.</p>
+        <button id="sampleButton" class="secondary wide">Load sample providers</button>
+        <button id="clearButton" class="danger wide">Clear local data</button>
+      </aside>
+    </section>
+  </main>
+  <dialog id="providerDialog">
+    <form method="dialog" id="providerForm">
+      <h3>Add provider</h3>
+      <label>Provider name<input name="name" required maxlength="40" placeholder="e.g. Claude"></label>
+      <label>Monthly spend (USD)<input name="spend" type="number" min="0" step="0.01" value="0"></label>
+      <label>Tokens used<input name="tokens" type="number" min="0" step="1" value="0"></label>
+      <div class="dialog-actions"><button value="cancel" class="secondary">Cancel</button><button value="default" class="primary">Save</button></div>
+    </form>
+  </dialog>
+  <script src="app.js" type="module"></script>
+</body>
+</html>
