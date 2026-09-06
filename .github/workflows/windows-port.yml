@@ -39,7 +39,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path package\AIUsage-Windows | Out-Null
-          Copy-Item windows-web\dist\AIUsage-Windows.exe package\AIUsage-Windows\AIUsage.exe
+          Copy-Item dist\AIUsage-Windows.exe package\AIUsage-Windows\AIUsage.exe
           Copy-Item docs\WINDOWS.md package\AIUsage-Windows\WINDOWS.md
           Compress-Archive -Path package\AIUsage-Windows\* -DestinationPath AIUsage-Windows.zip -Force
       - name: Upload Windows ZIP
@@ -52,5 +52,5 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: AIUsage-Windows-exe
-          path: windows-web/dist/AIUsage-Windows.exe
+          path: dist/AIUsage-Windows.exe
           if-no-files-found: error
