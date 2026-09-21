@@ -35,17 +35,6 @@
 <table>
   <tr>
     <td width="132" align="center">
-      <a href="https://fluxionai.world/register?aff=5546PDVUQ956"><img src="docs/images/fluxion-ai-logo.png" alt="Fluxion AI" width="88"></a><br>
-      <strong>Fluxion AI</strong>
-    </td>
-    <td>
-      <strong>一个网关，连接全球领先 AI 模型。</strong><br>
-      Fluxion AI 提供 GPT、Claude、Grok、DeepSeek、GLM、Kimi 等模型接入，支持多路由交付、按量计费，以及透明的请求、Token 与费用记录。<br>
-      <a href="https://fluxionai.world/register?aff=5546PDVUQ956"><strong>体验 Fluxion AI →</strong></a>
-    </td>
-  </tr>
-  <tr>
-    <td width="132" align="center">
       <a href="https://api-models.com/sign-up?aff=mfLW"><img src="docs/images/api-models-logo-light.png" alt="API Models" width="88"></a><br>
       <strong>API Models</strong>
     </td>
@@ -57,13 +46,13 @@
   </tr>
   <tr>
     <td width="132" align="center">
-      <a href="https://api-aimodels.com/register?aff=DrSm"><img src="https://r2.api-models.com/logo-dark-icon.png" alt="API AI Models" width="64"></a><br>
-      <strong>API AI Models</strong>
+      <a href="https://api-aimodels.com/register?aff=DrSm"><img src="https://r2.sucloud.vip/sucloud_web_logo.png" alt="Sucloud" width="72"></a><br>
+      <strong>Sucloud</strong>
     </td>
     <td>
       <strong>覆盖文本、图像、视频与音乐的 400+ 模型平台。</strong><br>
       多渠道模型聚合、价格透明，覆盖 Claude 官方渠道、AWSB、CCMax、Kiro、Seedance、Kling、Veo、HappyHorse 等。<br>
-      <a href="https://api-aimodels.com/register?aff=DrSm"><strong>访问 API AI Models →</strong></a>
+      <a href="https://api-aimodels.com/register?aff=DrSm"><strong>访问 Sucloud →</strong></a>
     </td>
   </tr>
 </table>
