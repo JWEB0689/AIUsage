@@ -24,15 +24,50 @@
   <a href="https://github.com/sylearn/AIUsage/releases"><img alt="下载量" src="https://img.shields.io/github/downloads/sylearn/AIUsage/total?style=flat-square&color=6366f1&label=downloads"></a>
 </p>
 
-<p align="center">
-  <sub>开发者 API 合作伙伴</sub><br><br>
-  <a href="https://api-models.com/sign-up?aff=mfLW">
-    <img src="docs/images/api-models-logo-light.png" alt="API Models" width="104">
-  </a><br>
-  <strong>前沿模型，一套 API。</strong><br>
-  <sub>低价按量计费 · 注册即享免费额度 · 独立状态监控 · 支持多种渠道支付</sub><br><br>
-  <a href="https://api-models.com/sign-up?aff=mfLW"><strong>注册并获取 API →</strong></a>
-</p>
+<h3 align="center">❤️ 赞助商</h3>
+
+<p align="center"><sub>感谢以下合作伙伴对 AIUsage 的支持。</sub></p>
+
+<details open>
+<summary><strong>查看赞助商</strong></summary>
+<br>
+
+<table>
+  <tr>
+    <td width="132" align="center">
+      <a href="https://fluxionai.world/register?aff=5546PDVUQ956"><img src="docs/images/fluxion-ai-logo.png" alt="Fluxion AI" width="88"></a><br>
+      <strong>Fluxion AI</strong>
+    </td>
+    <td>
+      <strong>一个网关，连接全球领先 AI 模型。</strong><br>
+      Fluxion AI 提供 GPT、Claude、Grok、DeepSeek、GLM、Kimi 等模型接入，支持多路由交付、按量计费，以及透明的请求、Token 与费用记录。<br>
+      <a href="https://fluxionai.world/register?aff=5546PDVUQ956"><strong>体验 Fluxion AI →</strong></a>
+    </td>
+  </tr>
+  <tr>
+    <td width="132" align="center">
+      <a href="https://api-models.com/sign-up?aff=mfLW"><img src="docs/images/api-models-logo-light.png" alt="API Models" width="88"></a><br>
+      <strong>API Models</strong>
+    </td>
+    <td>
+      <strong>前沿模型，一套 API。</strong><br>
+      高性价比统一 API，提供低价按量计费、注册免费额度、独立服务监控及多种渠道支付。<br>
+      <a href="https://api-models.com/sign-up?aff=mfLW"><strong>注册并获取 API →</strong></a>
+    </td>
+  </tr>
+  <tr>
+    <td width="132" align="center">
+      <a href="https://api-aimodels.com/register?aff=DrSm"><img src="https://r2.api-models.com/logo-dark-icon.png" alt="API AI Models" width="64"></a><br>
+      <strong>API AI Models</strong>
+    </td>
+    <td>
+      <strong>覆盖文本、图像、视频与音乐的 400+ 模型平台。</strong><br>
+      多渠道模型聚合、价格透明，覆盖 Claude 官方渠道、AWSB、CCMax、Kiro、Seedance、Kling、Veo、HappyHorse 等。<br>
+      <a href="https://api-aimodels.com/register?aff=DrSm"><strong>访问 API AI Models →</strong></a>
+    </td>
+  </tr>
+</table>
+</details>
 
 <p align="center">
   <img src="docs/images/dashboard-overview.png" alt="AIUsage 仪表盘" width="100%">
@@ -49,7 +84,6 @@
 - [代理](#代理)
 - [调用分析](#调用分析)
 - [致谢](#致谢)
-- [赞助商](#赞助商)
 - [许可证](#许可证)
 
 ## 功能
@@ -263,13 +297,6 @@ Claude Code 与 Codex 的用量、计费、缓存和归档细节见 [docs/USAGE_
 CPA 网关会按需运行官方 [`router-for-me/CLIProxyAPI`](https://github.com/router-for-me/CLIProxyAPI) 发布版，并可独立更新。CLIProxyAPI 仍是采用其自身许可证的独立上游项目，详情见[第三方声明](THIRD_PARTY_NOTICES.md)。
 
 产品思路与实现参考包括 [`CodexBar`](https://github.com/steipete/CodexBar) 与 [`Quotio`](https://github.com/nguyenphutrong/quotio)。
-
-## 赞助商
-
-| | **定位** | **覆盖** | |
-| --- | --- | --- | --- |
-| [<img src="docs/images/api-models-logo-light.png" alt="API Models" width="24" valign="middle"> **API Models**](https://api-models.com/sign-up?aff=mfLW) | 高性价比统一 API · 低价按量 · 注册送额度 | OpenAI 兼容 · Anthropic · Gemini · 独立监控 | [获取 API →](https://api-models.com/sign-up?aff=mfLW) |
-| [<img src="https://r2.api-models.com/logo-dark-icon.png" alt="API AI Models" width="24" valign="middle"> **API AI Models**](https://api-aimodels.com/register?aff=DrSm) | 400+ 模型聚合 · 多渠道切换 · 价格透明 · 稳定可靠 | 文本 / 图像 / 视频 / 音乐全系列 · Claude 官方 · AWSB · CCMax · Kiro · Seedance 2.0 · Kling · Veo · HappyHorse 等 | [访问 →](https://api-aimodels.com/register?aff=DrSm) |
 
 ## 友链
 

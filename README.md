@@ -24,15 +24,50 @@
   <a href="https://github.com/sylearn/AIUsage/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/sylearn/AIUsage/total?style=flat-square&color=6366f1&label=downloads"></a>
 </p>
 
-<p align="center">
-  <sub>DEVELOPER API PARTNER</sub><br><br>
-  <a href="https://api-models.com/sign-up?aff=mfLW">
-    <img src="docs/images/api-models-logo-light.png" alt="API Models" width="104">
-  </a><br>
-  <strong>Every frontier model. One API.</strong><br>
-  <sub>Low-cost pay-as-you-go · Free usage credits on sign-up · Independently monitored · Multiple payment methods</sub><br><br>
-  <a href="https://api-models.com/sign-up?aff=mfLW"><strong>Get API access →</strong></a>
-</p>
+<h3 align="center">❤️ Sponsors</h3>
+
+<p align="center"><sub>Thanks to these partners for supporting AIUsage.</sub></p>
+
+<details open>
+<summary><strong>View sponsors</strong></summary>
+<br>
+
+<table>
+  <tr>
+    <td width="132" align="center">
+      <a href="https://fluxionai.world/register?aff=5546PDVUQ956"><img src="docs/images/fluxion-ai-logo.png" alt="Fluxion AI" width="88"></a><br>
+      <strong>Fluxion AI</strong>
+    </td>
+    <td>
+      <strong>One gateway to the world's leading AI models.</strong><br>
+      Fluxion AI provides access to GPT, Claude, Grok, DeepSeek, GLM, Kimi, and more, with multi-route delivery, pay-as-you-go pricing, and transparent request, token, and cost records.<br>
+      <a href="https://fluxionai.world/register?aff=5546PDVUQ956"><strong>Explore Fluxion AI →</strong></a>
+    </td>
+  </tr>
+  <tr>
+    <td width="132" align="center">
+      <a href="https://api-models.com/sign-up?aff=mfLW"><img src="docs/images/api-models-logo-light.png" alt="API Models" width="88"></a><br>
+      <strong>API Models</strong>
+    </td>
+    <td>
+      <strong>Every frontier model. One API.</strong><br>
+      Cost-effective unified API with low-cost pay-as-you-go billing, free usage credits on sign-up, independent service monitoring, and multiple payment methods.<br>
+      <a href="https://api-models.com/sign-up?aff=mfLW"><strong>Get API access →</strong></a>
+    </td>
+  </tr>
+  <tr>
+    <td width="132" align="center">
+      <a href="https://api-aimodels.com/register?aff=DrSm"><img src="https://r2.api-models.com/logo-dark-icon.png" alt="API AI Models" width="64"></a><br>
+      <strong>API AI Models</strong>
+    </td>
+    <td>
+      <strong>400+ models across text, image, video, and music.</strong><br>
+      A multi-channel model hub with transparent pricing and broad coverage, including Claude official channels, AWSB, CCMax, Kiro, Seedance, Kling, Veo, HappyHorse, and more.<br>
+      <a href="https://api-aimodels.com/register?aff=DrSm"><strong>Visit API AI Models →</strong></a>
+    </td>
+  </tr>
+</table>
+</details>
 
 <p align="center">
   <img src="docs/images/dashboard-overview_en.png" alt="AIUsage dashboard" width="100%">
@@ -49,7 +84,6 @@
 - [Proxies](#proxies)
 - [Call Analytics](#call-analytics)
 - [Acknowledgements](#acknowledgements)
-- [Sponsor](#sponsor)
 - [License](#license)
 
 ## Features
@@ -263,13 +297,6 @@ See which **MCP servers, skills and tools** you actually use. AIUsage parses the
 CPA Gateway runs the official [`router-for-me/CLIProxyAPI`](https://github.com/router-for-me/CLIProxyAPI) release as an optional, separately updated local sidecar. CLIProxyAPI remains an independent upstream project under its own license; see [Third-Party Notices](THIRD_PARTY_NOTICES.md).
 
 Product inspiration and implementation references include [`CodexBar`](https://github.com/steipete/CodexBar) and [`Quotio`](https://github.com/nguyenphutrong/quotio).
-
-## Sponsor
-
-| | **Positioning** | **Coverage** | |
-| --- | --- | --- | --- |
-| [<img src="docs/images/api-models-logo-light.png" alt="API Models" width="24" valign="middle"> **API Models**](https://api-models.com/sign-up?aff=mfLW) | Cost-effective unified API · low-cost PAYG · free credits on sign-up | OpenAI-compatible · Anthropic · Gemini · independently monitored | [Get API →](https://api-models.com/sign-up?aff=mfLW) |
-| [<img src="https://r2.api-models.com/logo-dark-icon.png" alt="API AI Models" width="24" valign="middle"> **API AI Models**](https://api-aimodels.com/register?aff=DrSm) | 400+ model hub · multi-channel routing · transparent pricing · reliable uptime | Text · image · video · music — full lineup incl. Claude official · AWSB · CCMax · Kiro · Seedance 2.0 · Kling · Veo · HappyHorse, and more | [Visit →](https://api-aimodels.com/register?aff=DrSm) |
 
 ## Friendly Links
 
