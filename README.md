@@ -39,9 +39,11 @@
       <strong>API Models</strong>
     </td>
     <td>
-      <strong>Every frontier model. One API.</strong><br>
-      Cost-effective unified API with low-cost pay-as-you-go billing, free usage credits on sign-up, independent service monitoring, and multiple payment methods.<br>
-      <a href="https://api-models.com/sign-up?aff=mfLW"><strong>Get API access →</strong></a>
+      <strong>100+ models. One API. Save up to 98%.*</strong><br>
+      Access leading models from OpenAI, Anthropic, Gemini, Grok, DeepSeek, GLM, Kimi, Qwen, and more.<br>
+      <strong>Earn 5% referral rewards</strong> on invited users' recharges—use them as API credit or withdraw in USDT.<br>
+      <a href="https://api-models.com/sign-up?aff=mfLW"><strong>Start saving with API Models →</strong></a><br>
+      <sub>*Savings vary by model and apply to selected models. Referral program terms apply.</sub>
     </td>
   </tr>
   <tr>

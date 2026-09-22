@@ -39,9 +39,11 @@
       <strong>API Models</strong>
     </td>
     <td>
-      <strong>前沿模型，一套 API。</strong><br>
-      高性价比统一 API，提供低价按量计费、注册免费额度、独立服务监控及多种渠道支付。<br>
-      <a href="https://api-models.com/sign-up?aff=mfLW"><strong>注册并获取 API →</strong></a>
+      <strong>100+ 模型，一套 API，最高节省 98%*。</strong><br>
+      接入 OpenAI、Anthropic、Gemini、Grok、DeepSeek、GLM、Kimi、Qwen 等主流模型。<br>
+      受邀用户充值即可获得 <strong>5% 推荐奖励</strong>，收益可转为 API 余额或提取 USDT。<br>
+      <a href="https://api-models.com/sign-up?aff=mfLW"><strong>用 API Models 降低模型成本 →</strong></a><br>
+      <sub>*节省幅度因模型而异，仅适用于部分模型；推荐计划以当前条款为准。</sub>
     </td>
   </tr>
   <tr>
