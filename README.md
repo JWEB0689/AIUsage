@@ -39,11 +39,10 @@
       <strong>API Models</strong>
     </td>
     <td>
-      <strong>100+ models. One API. Save up to 98%.*</strong><br>
+      <strong>100+ models. One API. Save up to 98%.</strong><br>
       Access leading models from OpenAI, Anthropic, Gemini, Grok, DeepSeek, GLM, Kimi, Qwen, and more.<br>
       <strong>Earn 5% referral rewards</strong> on invited users' recharges—use them as API credit or withdraw in USDT.<br>
-      <a href="https://api-models.com/sign-up?aff=mfLW"><strong>Start saving with API Models →</strong></a><br>
-      <sub>*Savings vary by model and apply to selected models. Referral program terms apply.</sub>
+      <a href="https://api-models.com/sign-up?aff=mfLW"><strong>Start saving with API Models →</strong></a>
     </td>
   </tr>
   <tr>
