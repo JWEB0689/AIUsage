@@ -35,6 +35,17 @@
 <table>
   <tr>
     <td width="132" align="center">
+      <a href="https://fluxionai.world/register?source=github&amp;campaign=github-aiusage&amp;promo=AIUSAGE"><img src="docs/images/fluxion-ai-logo.png" alt="Fluxion AI" width="88"></a><br>
+      <strong>Fluxion AI</strong>
+    </td>
+    <td>
+      Fluxion AI 通过统一 API，提供可靠、高性价比的 GPT、Claude 及其他主流 AI 模型接入服务。<br>
+      相比官方 API 定价，最高可节省 70%；通过此链接注册，即可获赠 3 美元 API 额度。<br>
+      <a href="https://fluxionai.world/register?source=github&amp;campaign=github-aiusage&amp;promo=AIUSAGE"><strong>注册 Fluxion AI，领取 3 美元 API 额度 →</strong></a>
+    </td>
+  </tr>
+  <tr>
+    <td width="132" align="center">
       <a href="https://api-models.com/sign-up?aff=mfLW"><img src="docs/images/api-models-logo-light.png" alt="API Models" width="88"></a><br>
       <strong>API Models</strong>
     </td>
@@ -54,17 +65,6 @@
       <strong>覆盖文本、图像、视频与音乐的 400+ 模型平台。</strong><br>
       多渠道模型聚合、价格透明，覆盖 Claude 官方渠道、AWSB、CCMax、Kiro、Seedance、Kling、Veo、HappyHorse 等。<br>
       <a href="https://api-aimodels.com/register?aff=DrSm"><strong>访问 Sucloud →</strong></a>
-    </td>
-  </tr>
-  <tr>
-    <td width="132" align="center">
-      <a href="https://fluxionai.world/register?source=github&amp;campaign=github-aiusage&amp;promo=AIUSAGE"><img src="docs/images/fluxion-ai-logo.png" alt="Fluxion AI" width="88"></a><br>
-      <strong>Fluxion AI</strong>
-    </td>
-    <td>
-      Fluxion AI 通过统一 API，提供可靠、高性价比的 GPT、Claude 及其他主流 AI 模型接入服务。<br>
-      相比官方 API 定价，最高可节省 70%；通过此链接注册，即可获赠 3 美元 API 额度。<br>
-      <a href="https://fluxionai.world/register?source=github&amp;campaign=github-aiusage&amp;promo=AIUSAGE"><strong>注册 Fluxion AI，领取 3 美元 API 额度 →</strong></a>
     </td>
   </tr>
 </table>
