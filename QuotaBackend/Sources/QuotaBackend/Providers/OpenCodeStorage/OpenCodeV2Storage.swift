@@ -1,0 +1,408 @@
+import Foundation
+import SQLite3
+import os.log
+
+// MARK: - OpenCode V2 Storage
+// v2 schema 读取：`session_message` 表（data JSON 嵌套 model 对象 + reasoning）+ tool 调用内联 data.content
+// + credential 表凭据。本文件只承载 v2 差异，v1/v3 新增不触碰。
+
+private let openCodeV2Log = Logger(subsystem: "com.aiusage.quotabackend", category: "OpenCodeV2Storage")
+
+struct OpenCodeV2Storage: OpenCodeStorage {
+    let homeDirectory: String
+    let environment: [String: String]
+    let schema: OpenCodeSchema = .v2
+
+    var credentialFilePaths: [String] { [] }
+
+    init(homeDirectory: String, environment: [String: String]) {
+        self.homeDirectory = homeDirectory
+        self.environment = environment
+    }
+
+    // MARK: - Message
+
+    private struct V2MessageData: Decodable {
+        struct ModelRef: Decodable {
+            let id: String?
+            let providerID: String?
+        }
+        struct Tokens: Decodable {
+            struct Cache: Decodable {
+                let read: Int?
+                let write: Int?
+            }
+            let input: Int?
+            let output: Int?
+            let reasoning: Int?
+            let cache: Cache?
+        }
+        struct TimeInfo: Decodable {
+            let created: Int64?
+            let completed: Int64?
+        }
+
+        let type: String?
+        let model: ModelRef?
+        let cost: Double?
+        let tokens: Tokens?
+        let time: TimeInfo?
+    }
+
+    func fetchMessages(dbPath: String, query: OpenCodeMessageQuery) throws -> [OpenCodeMessage] {
+        var db: OpaquePointer?
+        guard sqlite3_open_v2(dbPath, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
+            let message = db.map { String(cString: sqlite3_errmsg($0)) } ?? "unable to open database"
+            sqlite3_close(db)
+            throw ProviderError("db_open_failed", SensitiveDataRedactor.redactPaths(in: message))
+        }
+        defer { sqlite3_close(db) }
+
+        var sql = "SELECT id, session_id, time_created, data FROM session_message WHERE type='assistant'"
+        var binds: [BindValue] = []
+        if let since = query.sinceMillis {
+            sql += " AND time_created >= ?"
+            binds.append(.int64(since))
+        }
+        if let dataLike = query.dataLike {
+            sql += " AND data LIKE ?"
+            binds.append(.text(dataLike))
+        }
+        // 稳定倒序：recent 取前 N 条需最新在前，否则 stats 页 recent 列表顺序随 sqlite 扫描顺序漂移。
+        sql += " ORDER BY time_created DESC, id DESC"
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw ProviderError("db_query_failed", SensitiveDataRedactor.redactPaths(in: String(cString: sqlite3_errmsg(db))))
+        }
+        defer { sqlite3_finalize(statement) }
+
+        bind(binds, to: statement)
+
+        let decoder = JSONDecoder()
+        var messages: [OpenCodeMessage] = []
+        while true {
+            let stepResult = sqlite3_step(statement)
+            if stepResult == SQLITE_DONE { break }
+            guard stepResult == SQLITE_ROW else {
+                throw ProviderError("db_step_failed", SensitiveDataRedactor.redactPaths(in: String(cString: sqlite3_errmsg(db))))
+            }
+            guard let idCString = sqlite3_column_text(statement, 0),
+                  let sessionCString = sqlite3_column_text(statement, 1),
+                  let dataCString = sqlite3_column_text(statement, 3) else {
+                continue
+            }
+            let id = String(cString: idCString)
+            let sessionId = String(cString: sessionCString)
+            let millis = sqlite3_column_int64(statement, 2)
+            let data = Data(String(cString: dataCString).utf8)
+
+            guard let parsed = try? decoder.decode(V2MessageData.self, from: data) else {
+                continue
+            }
+            messages.append(Self.normalizeMessage(id: id, sessionId: sessionId, millis: millis, parsed: parsed))
+        }
+        openCodeV2Log.debug("Fetched \(messages.count, privacy: .public) v2 message rows")
+        return messages
+    }
+
+    // MARK: - Tool
+
+    func fetchToolCalls(dbPath: String, sinceMillis: Int64?) throws -> [OpenCodeToolCall] {
+        var db: OpaquePointer?
+        guard sqlite3_open_v2(dbPath, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
+            let message = db.map { String(cString: sqlite3_errmsg($0)) } ?? "unable to open database"
+            sqlite3_close(db)
+            throw ProviderError("db_open_failed", SensitiveDataRedactor.redactPaths(in: message))
+        }
+        defer { sqlite3_close(db) }
+
+        var sql = "SELECT id, time_created, data FROM session_message WHERE type='assistant'"
+        if sinceMillis != nil {
+            sql += " AND time_created >= ?"
+        }
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw ProviderError("db_query_failed", SensitiveDataRedactor.redactPaths(in: String(cString: sqlite3_errmsg(db))))
+        }
+        defer { sqlite3_finalize(statement) }
+
+        if let sinceMillis {
+            sqlite3_bind_int64(statement, 1, sinceMillis)
+        }
+
+        var calls: [OpenCodeToolCall] = []
+        while true {
+            let stepResult = sqlite3_step(statement)
+            if stepResult == SQLITE_DONE { break }
+            guard stepResult == SQLITE_ROW else {
+                throw ProviderError("db_step_failed", SensitiveDataRedactor.redactPaths(in: String(cString: sqlite3_errmsg(db))))
+            }
+            guard let dataCString = sqlite3_column_text(statement, 2) else { continue }
+            let fallbackMillis = sqlite3_column_int64(statement, 1)
+            let data = Data(String(cString: dataCString).utf8)
+
+            guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let content = object["content"] as? [[String: Any]] else {
+                continue
+            }
+            for item in content {
+                calls.append(contentsOf: Self.normalizeTool(fallbackMillis: fallbackMillis, object: item))
+            }
+        }
+        openCodeV2Log.debug("Fetched \(calls.count, privacy: .public) v2 tool calls")
+        return calls
+    }
+
+    // MARK: - Credential（credential 表）
+
+    func loadAllCredentials() -> [String: String] {
+        var db: OpaquePointer?
+        guard sqlite3_open_v2(openCodeDBPath, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
+            sqlite3_close(db)
+            return [:]
+        }
+        defer { sqlite3_close(db) }
+
+        let sql = "SELECT integration_id, value FROM credential WHERE active = 1"
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            return [:]
+        }
+        defer { sqlite3_finalize(statement) }
+
+        var result: [String: String] = [:]
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let integrationCString = sqlite3_column_text(statement, 0),
+                  let valueCString = sqlite3_column_text(statement, 1) else { continue }
+            let providerId = String(cString: integrationCString)
+            guard let value = Self.parseKey(from: String(cString: valueCString)) else { continue }
+            result[providerId] = value
+        }
+        return result
+    }
+
+    func upsertCredential(providerID: String, key: String) -> Bool {
+        var db: OpaquePointer?
+        guard sqlite3_open_v2(openCodeDBPath, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil) == SQLITE_OK else {
+            sqlite3_close(db)
+            openCodeV2Log.error("Failed to open db for credential upsert")
+            return false
+        }
+        defer { sqlite3_close(db) }
+        sqlite3_busy_timeout(db, 5000)
+
+        guard let valueJSON = Self.makeKeyValueJSON(key: key) else { return false }
+        let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
+
+        // 已有 active 凭据 → 原地更新；否则同 integration_id 先置 inactive 再插入。
+        let existingID = queryCredentialID(db: db, providerID: providerID)
+        if let existingID {
+            let sql = "UPDATE credential SET value = ?, time_updated = ? WHERE id = ?"
+            guard let statement = prepare(db, sql) else { return false }
+            defer { sqlite3_finalize(statement) }
+            sqlite3_bind_text(statement, 1, valueJSON, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            sqlite3_bind_int64(statement, 2, nowMillis)
+            sqlite3_bind_text(statement, 3, existingID, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            return sqlite3_step(statement) == SQLITE_DONE
+        }
+
+        guard exec(db, "UPDATE credential SET active = 0 WHERE integration_id = ?", .text(providerID)) else {
+            return false
+        }
+        let newID = "cred_" + UUID().uuidString
+        let sql = "INSERT INTO credential (id, integration_id, label, value, active, time_created, time_updated) VALUES (?, ?, 'default', ?, 1, ?, ?)"
+        guard let statement = prepare(db, sql) else { return false }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, newID, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        sqlite3_bind_text(statement, 2, providerID, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        sqlite3_bind_text(statement, 3, valueJSON, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        sqlite3_bind_int64(statement, 4, nowMillis)
+        sqlite3_bind_int64(statement, 5, nowMillis)
+        return sqlite3_step(statement) == SQLITE_DONE
+    }
+
+    func deleteCredential(providerID: String) -> Bool {
+        var db: OpaquePointer?
+        guard sqlite3_open_v2(openCodeDBPath, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil) == SQLITE_OK else {
+            sqlite3_close(db)
+            return false
+        }
+        defer { sqlite3_close(db) }
+        sqlite3_busy_timeout(db, 5000)
+
+        return exec(db, "DELETE FROM credential WHERE integration_id = ?", .text(providerID))
+    }
+
+    // MARK: - Private helpers
+
+    private var openCodeDBPath: String {
+        (resolveOpenCodeDataDirectory(homeDirectory: homeDirectory, environment: environment) as NSString)
+            .appendingPathComponent("opencode.db")
+    }
+
+    private func prepare(_ db: OpaquePointer?, _ sql: String) -> OpaquePointer? {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            return nil
+        }
+        return statement
+    }
+
+    private func exec(_ db: OpaquePointer?, _ sql: String, _ bind: BindValue?) -> Bool {
+        guard let statement = prepare(db, sql) else { return false }
+        defer { sqlite3_finalize(statement) }
+        if let bind {
+            switch bind {
+            case .int64(let int): sqlite3_bind_int64(statement, 1, int)
+            case .text(let str): sqlite3_bind_text(statement, 1, str, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            }
+        }
+        return sqlite3_step(statement) == SQLITE_DONE
+    }
+
+    private func queryCredentialID(db: OpaquePointer?, providerID: String) -> String? {
+        let sql = "SELECT id FROM credential WHERE integration_id = ? AND active = 1 LIMIT 1"
+        guard let statement = prepare(db, sql) else { return nil }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, providerID, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        guard sqlite3_step(statement) == SQLITE_ROW,
+              let idCString = sqlite3_column_text(statement, 0) else {
+            return nil
+        }
+        return String(cString: idCString)
+    }
+
+    private static func parseKey(from valueString: String) -> String? {
+        guard let data = valueString.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              object["type"] as? String == "key",
+              let key = object["key"] as? String else {
+            return nil
+        }
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func makeKeyValueJSON(key: String) -> String? {
+        guard let data = try? JSONSerialization.data(withJSONObject: ["type": "key", "key": key]) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func normalizeMessage(
+        id: String,
+        sessionId: String,
+        millis: Int64,
+        parsed: V2MessageData
+    ) -> OpenCodeMessage {
+        let input = parsed.tokens?.input ?? 0
+        let output = parsed.tokens?.output ?? 0
+        let reasoning = parsed.tokens?.reasoning ?? 0
+        let cacheRead = parsed.tokens?.cache?.read ?? 0
+        let cacheWrite = parsed.tokens?.cache?.write ?? 0
+        let cost = parsed.cost ?? 0
+        var durationMs: Int?
+        if let created = parsed.time?.created, let completed = parsed.time?.completed, completed >= created {
+            durationMs = Int(completed - created)
+        }
+        return OpenCodeMessage(
+            id: id,
+            sessionId: sessionId,
+            timeCreatedMillis: millis,
+            providerID: parsed.model?.providerID,
+            modelID: parsed.model?.id,
+            inputTokens: input,
+            outputTokens: output,
+            reasoningTokens: reasoning,
+            cacheReadTokens: cacheRead,
+            cacheCreateTokens: cacheWrite,
+            costUsd: cost,
+            durationMs: durationMs
+        )
+    }
+
+    static func normalizeTool(fallbackMillis: Int64, object: [String: Any]) -> [OpenCodeToolCall] {
+        guard object["type"] as? String == "tool",
+              let name = (object["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !name.isEmpty else {
+            return []
+        }
+
+        // v2 Code Mode：MCP 等 codemode:true 工具通过 `execute` 容器调用，真实调用藏在
+        // state.metadata.toolCalls（点分 namespace.tool）。展开成独立调用；为空时兜底保留 execute 本身。
+        if name == "execute" {
+            let expanded = Self.expandExecuteToolCalls(fallbackMillis: fallbackMillis, object: object)
+            if !expanded.isEmpty { return expanded }
+        }
+
+        let state = object["state"] as? [String: Any]
+        let status = (state?["status"] as? String)?.lowercased()
+        // v2 skill 工具：state.input 是 {id}（技能 id），显示名在 state.metadata.name；fallback 到 input.id；
+        // 最后兼容 v1 的 input.name（其它工具形态）。非 skill 工具不用 inputName。
+        let stateInput = state?["input"] as? [String: Any]
+        let stateMetadata = state?["metadata"] as? [String: Any]
+        let inputName = (stateMetadata?["name"] as? String)
+            ?? (stateInput?["id"] as? String)
+            ?? (stateInput?["name"] as? String)
+        let time = object["time"] as? [String: Any]
+        let createdMillis = (time?["created"] as? NSNumber)?.int64Value ?? fallbackMillis
+        var durationMs: Double?
+        let ran = (time?["ran"] as? NSNumber)?.doubleValue
+        let completed = (time?["completed"] as? NSNumber)?.doubleValue
+        if let completed {
+            if let ran, completed >= ran {
+                durationMs = completed - ran
+            } else if completed >= Double(createdMillis) {
+                durationMs = completed - Double(createdMillis)
+            }
+        }
+        return [OpenCodeToolCall(
+            id: (object["id"] as? String) ?? UUID().uuidString,
+            name: name,
+            timeCreatedMillis: createdMillis,
+            status: status,
+            durationMs: durationMs,
+            inputName: inputName
+        )]
+    }
+
+    /// 展开 v2 Code Mode `execute` 容器的 state.metadata.toolCalls：每个 item 的 `tool` 是点分
+    /// `namespace.tool`（如 dbx.dbx_execute_query），转下划线后与 native 模式 effectiveName
+    /// （`namespace_tool`）一致，供 classify 的 matchKnownServer 按 `server + "_"` 前缀匹配归 .mcp。
+    /// 状态用 item 自身 status（execute 整体 completed 不代表内部无 error）。
+    static func expandExecuteToolCalls(fallbackMillis: Int64, object: [String: Any]) -> [OpenCodeToolCall] {
+        guard let state = object["state"] as? [String: Any],
+              let metadata = state["metadata"] as? [String: Any],
+              let toolCalls = metadata["toolCalls"] as? [[String: Any]],
+              !toolCalls.isEmpty else {
+            return []
+        }
+        let time = object["time"] as? [String: Any]
+        let createdMillis = (time?["created"] as? NSNumber)?.int64Value ?? fallbackMillis
+        let executeStatus = (state["status"] as? String)?.lowercased()
+
+        // 展开的每个子调用若共用 execute 容器的 id，ledger 按 id upsert 会互相覆盖；
+        // 以父 id + 子序号生成唯一 id（同一容器内序号唯一，跨容器父 id 唯一）。
+        let parentID = (object["id"] as? String) ?? UUID().uuidString
+        var calls: [OpenCodeToolCall] = []
+        calls.reserveCapacity(toolCalls.count)
+        for (index, item) in toolCalls.enumerated() {
+            guard let tool = (item["tool"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !tool.isEmpty else { continue }
+            let normalized = tool.replacingOccurrences(of: ".", with: "_")
+            let status = (item["status"] as? String)?.lowercased() ?? executeStatus
+            calls.append(OpenCodeToolCall(
+                id: "\(parentID)#\(index)",
+                name: normalized,
+                timeCreatedMillis: createdMillis,
+                status: status,
+                durationMs: nil,
+                inputName: nil
+            ))
+        }
+        return calls
+    }
+}

@@ -103,6 +103,10 @@ final class OpenCodeConfigManager {
     /// 实际键为 `aiusage-<节点 slug>`（兼容剥离早期固定的 `aiusage`）。
     nonisolated static let providerIdPrefix = "aiusage"
 
+    /// opencode 顶层 provider 键：v1 单数 `provider`，v2 复数 `providers`。
+    /// 版本切换后可能残留旧键，读取/剥离时两者都处理。
+    private static let openCodeProviderKeys = ["provider", "providers"]
+
     /// 是否为本应用注入的受管 provider 键。
     nonisolated static func isManagedProviderKey(_ key: String) -> Bool {
         key == providerIdPrefix || key.hasPrefix(providerIdPrefix + "-")
@@ -118,6 +122,11 @@ final class OpenCodeConfigManager {
 
     private let fileManager = FileManager.default
     private let authStore = OpenCodeAuthStore.shared
+
+    /// 当前 opencode 版本（v1/v2），决定受管 provider 块的字段与顶层键。
+    private var openCodeSchema: OpenCodeSchema {
+        authStore.schema
+    }
     private var session: OpenCodeTakeoverSession?
 
     private init() {
@@ -176,8 +185,25 @@ final class OpenCodeConfigManager {
     /// 当前管理目标是否已注入受管节点。
     var isManaged: Bool {
         guard let root = try? readConfigObjectIfExists() else { return false }
-        guard let provider = root["provider"] as? [String: Any] else { return false }
-        return provider.keys.contains(where: Self.isManagedProviderKey)
+        for key in Self.openCodeProviderKeys {
+            if let provider = root[key] as? [String: Any],
+               provider.keys.contains(where: Self.isManagedProviderKey) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// 是否需要 v1→v2 自动迁移：opencode 已升级到 v2（顶层复数 `providers`），
+    /// 但配置里残留 v1 时代的受管块（单数 `provider` 键有 aiusage*，复数 `providers` 键没有）。
+    /// 仅用于启动时检测并触发一次重写；迁移后复数为新格式，此值为 false。
+    var needsV1ToV2Migration: Bool {
+        guard openCodeSchema == .v2 else { return false }
+        guard let root = try? readConfigObjectIfExists() else { return false }
+        let legacyProvider = root["provider"] as? [String: Any] ?? [:]
+        guard legacyProvider.keys.contains(where: Self.isManagedProviderKey) else { return false }
+        let modernProviders = root["providers"] as? [String: Any] ?? [:]
+        return !modernProviders.keys.contains(where: Self.isManagedProviderKey)
     }
 
     /// 是否存在我们的备份（代表接管态/未正常还原）。
@@ -308,6 +334,8 @@ final class OpenCodeConfigManager {
             }
         }
         let hadSession = session != nil
+        // v2 凭据在 opencode.db，不受 withManagedFilesTransaction 的文件快照保护，失败时需据此手动回滚。
+        let credentialSnapshot = authStore.snapshotManagedCredentials()
         do {
             let pristine = try establishBackupAndLoadPristine()
             try withManagedFilesTransaction {
@@ -343,6 +371,10 @@ final class OpenCodeConfigManager {
                 openCodeConfigLog.info("opencode config managed providers injected (nodes=\(nodes.count, privacy: .public), default=\(defaultNode.managedProviderId, privacy: .public), jsonc=\(self.usesJSONC, privacy: .public), keyInAuthFile=\(keyPlacement == .externalAuthFile, privacy: .public))")
             }
         } catch {
+            // v2 凭据在 opencode.db 不在文件事务内，激活中途失败需回滚到激活前快照。
+            if openCodeSchema == .v2 {
+                _ = authStore.syncManagedCredentials(credentialSnapshot)
+            }
             if !hadSession { discardSessionFiles() }
             throw error
         }
@@ -363,6 +395,8 @@ final class OpenCodeConfigManager {
     func activateGlobal(interface: OpenCodeProtocol, baseURL: String, clientKey: String, virtualModel: String) throws {
         let model = virtualModel.nilIfBlank ?? "model"
         let hadSession = session != nil
+        // v2 凭据在 opencode.db，不受 withManagedFilesTransaction 的文件快照保护，失败时需据此手动回滚。
+        let credentialSnapshot = authStore.snapshotManagedCredentials()
         do {
             let pristine = try establishBackupAndLoadPristine()
             try withManagedFilesTransaction {
@@ -372,14 +406,24 @@ final class OpenCodeConfigManager {
                 if root["$schema"] == nil {
                     root["$schema"] = "https://opencode.ai/config.json"
                 }
-                var provider = root["provider"] as? [String: Any] ?? [:]
-                provider[Self.globalProviderId] = [
-                    "npm": interface.npmPackage,
-                    "name": "AIUsage Global Proxy",
-                    "options": ["baseURL": baseURL, "apiKey": clientKey],
-                    "models": [model: ["name": model]],
-                ]
-                root["provider"] = provider
+                let providersKey = openCodeSchema == .v2 ? "providers" : "provider"
+                var provider = root[providersKey] as? [String: Any] ?? [:]
+                if openCodeSchema == .v2 {
+                    provider[Self.globalProviderId] = [
+                        "package": interface.npmPackage,
+                        "name": "AIUsage Global Proxy",
+                        "settings": ["baseURL": baseURL, "apiKey": clientKey],
+                        "models": [model: ["name": model]],
+                    ]
+                } else {
+                    provider[Self.globalProviderId] = [
+                        "npm": interface.npmPackage,
+                        "name": "AIUsage Global Proxy",
+                        "options": ["baseURL": baseURL, "apiKey": clientKey],
+                        "models": [model: ["name": model]],
+                    ]
+                }
+                root[providersKey] = provider
                 root["model"] = "\(Self.globalProviderId)/\(model)"
 
                 try writeManagedRoot(root)
@@ -388,6 +432,10 @@ final class OpenCodeConfigManager {
                 openCodeConfigLog.info("opencode config global proxy provider injected (interface=\(interface.rawValue, privacy: .public), model=\(model, privacy: .public), jsonc=\(self.usesJSONC, privacy: .public))")
             }
         } catch {
+            // v2 凭据在 opencode.db 不在文件事务内，激活中途失败需回滚到激活前快照。
+            if openCodeSchema == .v2 {
+                _ = authStore.syncManagedCredentials(credentialSnapshot)
+            }
             if !hadSession { discardSessionFiles() }
             throw error
         }
@@ -552,7 +600,7 @@ final class OpenCodeConfigManager {
     /// Keep config and auth changes all-or-nothing. A failed activation must not
     /// leave a provider block without its credential, or vice versa.
     private func withManagedFilesTransaction(_ operation: () throws -> Void) throws {
-        try withFileTransaction(paths: [configPath, authStore.path], operation)
+        try withFileTransaction(paths: [configPath] + authStore.transactionPaths, operation)
     }
 
     private func withFileTransaction(paths: [String], _ operation: () throws -> Void) throws {
@@ -607,7 +655,8 @@ final class OpenCodeConfigManager {
 
     // MARK: - Managed Block Building
 
-    /// 受管 provider 条目（写进 provider[managedProviderId] 的值）。激活与编辑器 JSON 预览共用。
+    /// 受管 provider 条目（写进 provider/providers[managedProviderId] 的值）。激活与编辑器 JSON 预览共用。
+    /// v2 写 {package, settings, models}，v1 写 {npm, options, models}。
     func managedProviderEntry(
         node: OpenCodeNode,
         baseURLOverride: String? = nil,
@@ -615,6 +664,7 @@ final class OpenCodeConfigManager {
     ) -> [String: Any] {
         // 每模型独立定价写入各自的 cost 块（USD/百万 token，CNY 录入按近似汇率折算），
         // OpenCode 据此把费用算进 opencode.db——金额单一来源，不在本地重复计费。
+        let isV2 = openCodeSchema == .v2
         let generationOptions = node.modelGenerationOptions
         var modelsBlock: [String: Any] = [:]
         for model in node.modelEntries where !model.id.isEmpty {
@@ -624,17 +674,31 @@ final class OpenCodeConfigManager {
             if node.outputLimit > 0 { limit["output"] = node.outputLimit }
             if !limit.isEmpty { entry["limit"] = limit }
             // 生成参数（temperature/topP/…）统一写入每个模型 options，OpenCode 透传给上游 SDK。
-            if !generationOptions.isEmpty { entry["options"] = generationOptions }
+            if !generationOptions.isEmpty { entry[isV2 ? "settings" : "options"] = generationOptions }
             // 每模型 modalities（issue #24）：任一侧非空才写，否则由 OpenCode 取模型默认。
             if model.hasModalities {
-                var modalities: [String: Any] = [:]
-                if !model.inputModalities.isEmpty {
-                    modalities["input"] = model.inputModalities.map(\.rawValue)
+                if isV2 {
+                    // v2 Capabilities 三项（tools/input/output）必填，缺项会被原生配置解码过滤掉、
+                    // 导致节点不可用。空侧补上游默认（Capabilities.default()），不能只写非空侧。
+                    entry["capabilities"] = [
+                        "tools": true,
+                        "input": model.inputModalities.isEmpty
+                            ? ["text", "image"]
+                            : model.inputModalities.map(\.rawValue),
+                        "output": model.outputModalities.isEmpty
+                            ? ["text"]
+                            : model.outputModalities.map(\.rawValue),
+                    ]
+                } else {
+                    var modBlock: [String: Any] = [:]
+                    if !model.inputModalities.isEmpty {
+                        modBlock["input"] = model.inputModalities.map(\.rawValue)
+                    }
+                    if !model.outputModalities.isEmpty {
+                        modBlock["output"] = model.outputModalities.map(\.rawValue)
+                    }
+                    entry["modalities"] = modBlock
                 }
-                if !model.outputModalities.isEmpty {
-                    modalities["output"] = model.outputModalities.map(\.rawValue)
-                }
-                entry["modalities"] = modalities
             }
             if node.pricingCurrency != .none, model.hasPricing {
                 let currency = node.pricingCurrency
@@ -642,11 +706,22 @@ final class OpenCodeConfigManager {
                     "input": currency.toUSD(model.priceInputPerMillion),
                     "output": currency.toUSD(model.priceOutputPerMillion),
                 ]
-                if model.priceCacheReadPerMillion > 0 {
-                    costBlock["cache_read"] = currency.toUSD(model.priceCacheReadPerMillion)
-                }
-                if model.priceCacheWritePerMillion > 0 {
-                    costBlock["cache_write"] = currency.toUSD(model.priceCacheWritePerMillion)
+                if isV2 {
+                    var cache: [String: Any] = [:]
+                    if model.priceCacheReadPerMillion > 0 {
+                        cache["read"] = currency.toUSD(model.priceCacheReadPerMillion)
+                    }
+                    if model.priceCacheWritePerMillion > 0 {
+                        cache["write"] = currency.toUSD(model.priceCacheWritePerMillion)
+                    }
+                    if !cache.isEmpty { costBlock["cache"] = cache }
+                } else {
+                    if model.priceCacheReadPerMillion > 0 {
+                        costBlock["cache_read"] = currency.toUSD(model.priceCacheReadPerMillion)
+                    }
+                    if model.priceCacheWritePerMillion > 0 {
+                        costBlock["cache_write"] = currency.toUSD(model.priceCacheWritePerMillion)
+                    }
                 }
                 entry["cost"] = costBlock
             }
@@ -658,19 +733,27 @@ final class OpenCodeConfigManager {
             modelsBlock[model.id] = entry
         }
 
-        var options: [String: Any] = ["baseURL": baseURLOverride ?? node.baseURL]
+        var transport: [String: Any] = ["baseURL": baseURLOverride ?? node.baseURL]
         if baseURLOverride != nil {
             // 代理模式：真实 Key 留在代理进程环境里，配置里只放客户端 Key（设了则代理据此鉴权），
             // 留空时回退占位符（AI SDK 各包都需要非空 apiKey 才不会去找环境变量）。
-            options["apiKey"] = node.expectedClientKey.nilIfBlank ?? "aiusage-proxy"
+            transport["apiKey"] = node.expectedClientKey.nilIfBlank ?? "aiusage-proxy"
         } else if let apiKey = node.apiKey.nilIfBlank, keyPlacement == .inlineOptions {
-            options["apiKey"] = apiKey
+            transport["apiKey"] = apiKey
         }
 
+        if isV2 {
+            return [
+                "package": node.protocolType.npmPackage,
+                "name": node.displayName,
+                "settings": transport,
+                "models": modelsBlock,
+            ]
+        }
         return [
             "npm": node.protocolType.npmPackage,
             "name": node.displayName,
-            "options": options,
+            "options": transport,
             "models": modelsBlock,
         ]
     }
@@ -687,13 +770,14 @@ final class OpenCodeConfigManager {
             root["$schema"] = "https://opencode.ai/config.json"
         }
         let managedId = node.managedProviderId
-        var provider = root["provider"] as? [String: Any] ?? [:]
+        let providersKey = openCodeSchema == .v2 ? "providers" : "provider"
+        var provider = root[providersKey] as? [String: Any] ?? [:]
         provider[managedId] = managedProviderEntry(
             node: node,
             baseURLOverride: baseURLOverride,
             keyPlacement: keyPlacement
         )
-        root["provider"] = provider
+        root[providersKey] = provider
         return root
     }
 
@@ -835,16 +919,27 @@ final class OpenCodeConfigManager {
 
     private func restore(forceExternalChanges: Bool) throws {
         guard let active = session else {
-            guard authStore.removeManagedCredentials() else {
-                throw OpenCodeConfigError.failedToRestore
-            }
-            guard let root = try? readConfigObjectIfExists() else { return }
-            let stripped = stripManagedEntries(from: root)
-            let meaningfulKeys = stripped.keys.filter { $0 != "$schema" }
-            if meaningfulKeys.isEmpty {
-                try? fileManager.removeItem(atPath: configPath)
-            } else {
-                try writeCleanRoot(stripped, toPath: configPath)
+            // v2 凭据在 opencode.db，不在文件事务内，停用中途失败需回滚到停用前快照。
+            // 凭证清理、配置读取/写入/删除全部置于同一 do/catch：任一步失败都恢复凭证快照。
+            let credentialSnapshot = authStore.snapshotManagedCredentials()
+            do {
+                guard authStore.removeManagedCredentials() else {
+                    throw OpenCodeConfigError.failedToRestore
+                }
+                // 配置文件不存在 → 无受管块可剥，视为正常完成；读取/解析失败 → 抛错走回滚。
+                guard let root = try readConfigObjectIfExists() else { return }
+                let stripped = stripManagedEntries(from: root)
+                let meaningfulKeys = stripped.keys.filter { $0 != "$schema" }
+                if meaningfulKeys.isEmpty {
+                    try fileManager.removeItem(atPath: configPath)
+                } else {
+                    try writeCleanRoot(stripped, toPath: configPath)
+                }
+            } catch {
+                if openCodeSchema == .v2 {
+                    _ = authStore.syncManagedCredentials(credentialSnapshot)
+                }
+                throw error
             }
             return
         }
@@ -881,9 +976,11 @@ final class OpenCodeConfigManager {
         guard let backupPath = active.backupPath, active.originalExists else {
             throw OpenCodeConfigError.failedToRestore
         }
+        // v2 凭据在 opencode.db，不在 withFileTransaction 的文件快照内，还原中途失败需回滚到还原前快照。
+        let credentialSnapshot = authStore.snapshotManagedCredentials()
         do {
             let data = try Data(contentsOf: URL(fileURLWithPath: backupPath))
-            try withFileTransaction(paths: [active.targetPath, authStore.path, sessionManifestPath, backupPath]) {
+            try withFileTransaction(paths: [active.targetPath] + authStore.transactionPaths + [sessionManifestPath, backupPath]) {
                 let directory = (active.targetPath as NSString).deletingLastPathComponent
                 try fileManager.createDirectory(atPath: directory, withIntermediateDirectories: true)
                 try data.write(to: URL(fileURLWithPath: active.targetPath), options: .atomic)
@@ -901,17 +998,23 @@ final class OpenCodeConfigManager {
             }
             session = nil
             openCodeConfigLog.info("OpenCode config restored from takeover session")
-        } catch let error as OpenCodeConfigError {
-            throw error
         } catch {
+            if openCodeSchema == .v2 {
+                _ = authStore.syncManagedCredentials(credentialSnapshot)
+            }
+            if let configError = error as? OpenCodeConfigError {
+                throw configError
+            }
             openCodeConfigLog.error("Failed to restore OpenCode config: \(String(describing: error), privacy: .public)")
             throw OpenCodeConfigError.failedToRestore
         }
     }
 
     private func finishManagedOnlyRestore(_ active: OpenCodeTakeoverSession) throws {
+        // v2 凭据在 opencode.db，不在 withFileTransaction 的文件快照内，还原中途失败需回滚到还原前快照。
+        let credentialSnapshot = authStore.snapshotManagedCredentials()
         do {
-            try withFileTransaction(paths: [active.targetPath, authStore.path, sessionManifestPath]) {
+            try withFileTransaction(paths: [active.targetPath] + authStore.transactionPaths + [sessionManifestPath]) {
                 if let root = try readConfigObjectIfExists() {
                     let stripped = stripManagedEntries(from: root)
                     let meaningfulKeys = stripped.keys.filter { $0 != "$schema" }
@@ -929,6 +1032,9 @@ final class OpenCodeConfigManager {
             session = nil
             openCodeConfigLog.info("OpenCode managed-only config restored")
         } catch {
+            if openCodeSchema == .v2 {
+                _ = authStore.syncManagedCredentials(credentialSnapshot)
+            }
             session = active
             throw OpenCodeConfigError.failedToRestore
         }
@@ -936,17 +1042,19 @@ final class OpenCodeConfigManager {
 
     // MARK: - Transform
 
-    /// 剥离全部受管条目：`aiusage*` provider 键（空了则连 provider 键一起删）与指向它们的顶层 model。
+    /// 剥离全部受管条目：`aiusage*` 键（空了则连 provider/providers 键一起删）与指向它们的顶层 model。
     func stripManagedEntries(from root: [String: Any]) -> [String: Any] {
         var result = root
-        if var provider = result["provider"] as? [String: Any] {
-            for key in provider.keys where Self.isManagedProviderKey(key) {
-                provider.removeValue(forKey: key)
-            }
-            if provider.isEmpty {
-                result.removeValue(forKey: "provider")
-            } else {
-                result["provider"] = provider
+        for providersKey in Self.openCodeProviderKeys {
+            if var provider = result[providersKey] as? [String: Any] {
+                for key in provider.keys where Self.isManagedProviderKey(key) {
+                    provider.removeValue(forKey: key)
+                }
+                if provider.isEmpty {
+                    result.removeValue(forKey: providersKey)
+                } else {
+                    result[providersKey] = provider
+                }
             }
         }
         if let model = result["model"] as? String,
@@ -959,9 +1067,11 @@ final class OpenCodeConfigManager {
 
     /// 配置是否已含本应用注入的受管条目（受管 provider 键或指向它的顶层 model）。
     private func managedKeysPresent(in root: [String: Any]) -> Bool {
-        if let provider = root["provider"] as? [String: Any],
-           provider.keys.contains(where: Self.isManagedProviderKey) {
-            return true
+        for key in Self.openCodeProviderKeys {
+            if let provider = root[key] as? [String: Any],
+               provider.keys.contains(where: Self.isManagedProviderKey) {
+                return true
+            }
         }
         if let model = root["model"] as? String,
            let modelProvider = model.split(separator: "/", maxSplits: 1).first {
@@ -978,11 +1088,13 @@ final class OpenCodeConfigManager {
     }
 
     private func managedProjectionMatches(target: [String: Any], effective: [String: Any]) -> Bool {
-        let targetProvider = target["provider"] as? [String: Any] ?? [:]
-        let effectiveProvider = effective["provider"] as? [String: Any] ?? [:]
-        for (key, value) in targetProvider where Self.isManagedProviderKey(key) {
-            guard let effectiveValue = effectiveProvider[key],
-                  canonicalJSON(value) == canonicalJSON(effectiveValue) else { return false }
+        for providersKey in Self.openCodeProviderKeys {
+            let targetProvider = target[providersKey] as? [String: Any] ?? [:]
+            let effectiveProvider = effective[providersKey] as? [String: Any] ?? [:]
+            for (key, value) in targetProvider where Self.isManagedProviderKey(key) {
+                guard let effectiveValue = effectiveProvider[key],
+                      canonicalJSON(value) == canonicalJSON(effectiveValue) else { return false }
+            }
         }
         if let model = target["model"] as? String,
            let provider = model.split(separator: "/", maxSplits: 1).first,
