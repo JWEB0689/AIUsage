@@ -11,6 +11,7 @@ struct RuntimeSummary: Codable {
     let homeDirectory: String
 }
 
+/// Prints the app name, version, usage, and command descriptions to standard output.
 func printHelp() {
     print("""
 \(appName) v\(version)
@@ -27,6 +28,8 @@ Commands:
 """)
 }
 
+/// Prints a fixed readiness message and the operating system, current and home
+/// directories, and executable argument to standard output.
 func printStatus() {
     let info = ProcessInfo.processInfo
     let fm = FileManager.default
@@ -37,10 +40,13 @@ func printStatus() {
     print("Executable: \(CommandLine.arguments.first ?? "AIUsageWindowsCLI")")
 }
 
+/// Prints the app version to standard output.
 func printVersion() {
     print(version)
 }
 
+/// Prints selected Windows environment variables to standard output as `KEY=value`
+/// lines, skipping variables that are not set.
 func printEnv() {
     let keys = [
         "PROCESSOR_ARCHITECTURE",
@@ -61,6 +67,10 @@ func printEnv() {
     }
 }
 
+/// Prints the app name, version, operating system, and current and home directories
+/// to standard output as pretty-printed JSON with sorted keys.
+/// Falls back to JSON containing only the app name and version if encoding or
+/// UTF-8 conversion fails; encoding errors are caught.
 func printJSON() {
     let summary = RuntimeSummary(
         appName: appName,
