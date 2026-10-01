@@ -18,3 +18,12 @@ swiftc -parse-as-library \
   -o "$WORK_DIR/science-auth-regression"
 
 "$WORK_DIR/science-auth-regression"
+
+swiftc -parse-as-library \
+  "$ROOT_DIR/AIUsage/Services/Science/ScienceVirtualLogin.swift" \
+  "$ROOT_DIR/AIUsage/Services/Science/ScienceAuthProxy.swift" \
+  "$ROOT_DIR/AIUsage/Services/Science/ScienceAuthProxy+Helpers.swift" \
+  "$ROOT_DIR/scripts/ScienceRuntimeRegression.swift" \
+  -o "$WORK_DIR/science-runtime-regression"
+
+"$WORK_DIR/science-runtime-regression"

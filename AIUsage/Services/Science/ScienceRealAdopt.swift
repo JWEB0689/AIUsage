@@ -31,7 +31,7 @@ import os.log
 // 护栏：只写 `~/.claude-science/operon.lock` 这一个运行期文件（可删还原）；内部 daemon/虚拟登录只落在
 // 独立 adopt 目录；端口兜底只杀 claude-science 进程；绝不写系统全局环境变量。
 
-private let adoptLog = Logger(subsystem: "com.aiusage.desktop", category: "ScienceRealAdopt")
+nonisolated private let adoptLog = Logger(subsystem: "com.aiusage.desktop", category: "ScienceRealAdopt")
 
 enum ScienceRealAdoptError: LocalizedError {
     case daemonStartFailed(String)
@@ -44,7 +44,7 @@ enum ScienceRealAdoptError: LocalizedError {
     }
 }
 
-enum ScienceRealAdopt {
+nonisolated enum ScienceRealAdopt {
     /// 真实凭证目录（= 桌面 app 默认 data-dir）。只用于劫持它的 operon.lock，绝不写其凭证。
     static var realDir: String { (NSHomeDirectory() as NSString).appendingPathComponent(".claude-science") }
 
@@ -77,12 +77,12 @@ enum ScienceRealAdopt {
 
     /// 在独立 data-dir 上、内部端口 14411 起虚拟登录的 daemon：env 注入 ANTHROPIC_BASE_URL=本地推理代理。
     /// 复用沙箱链路（APFS 克隆运行时 + 铸虚拟登录 + serve），只是端口用 14411、账号用 adopt 假邮箱。
-    static func startInternalDaemon(proxyPort: Int, email: String) throws {
+    static func startInternalDaemon(proxyPort: Int, email: String, previewPort: Int, nativePreviewPort: Int) throws {
         let paths = adoptPaths()
         do {
             try ScienceSandbox.prepare(paths: paths)
             _ = try ScienceVirtualLogin.ensure(authDir: paths.dataDir, email: email, sandboxRoot: paths.home)
-            try ScienceSandbox.launch(paths: paths, sciencePort: internalPort, proxyPort: proxyPort)
+            try ScienceSandbox.launch(paths: paths, sciencePort: internalPort, proxyPort: proxyPort, previewPort: previewPort, nativePreviewPort: nativePreviewPort)
         } catch {
             throw ScienceRealAdoptError.daemonStartFailed(error.localizedDescription)
         }

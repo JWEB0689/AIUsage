@@ -16,7 +16,7 @@ import os.log
 // 安全边界：仅监听回环（127.0.0.1 + ::1）；只转发到本机内部 daemon；cookie 只在本机内存缓存，不落盘、不进日志。
 // 与推理链路（QuotaServer, 14402 端口）完全分离——本代理只管 Science 的 Web/WS 会话鉴权。
 
-private let authProxyLog = Logger(subsystem: "com.aiusage.desktop", category: "ScienceAuthProxy")
+nonisolated private let authProxyLog = Logger(subsystem: "com.aiusage.desktop", category: "ScienceAuthProxy")
 
 struct ScienceAuthProbeResult {
     let succeeded: Bool
@@ -67,6 +67,8 @@ final class ScienceAuthProxy: @unchecked Sendable {
     private var listeners: [NWListener] = []
     private var _listenPort = 0
     private var _upstreamPort = 0
+    private var _previewPort = 0
+    private var _nativePreviewPort = 0
     private var _dataDir = ""
     private var _cookies: ScienceSessionCookies?
     private var _lastAuthFailure: ScienceAuthFailure?
@@ -85,11 +87,13 @@ final class ScienceAuthProxy: @unchecked Sendable {
     func start(
         listenPort: Int,
         upstreamPort: Int,
+        previewPort: Int,
+        nativePreviewPort: Int,
         dataDir: String,
         modelCatalog: ScienceModelCatalog? = nil
     ) async throws {
         let alreadyRunning = stateLock.withLock {
-            _running && _listenPort == listenPort && _upstreamPort == upstreamPort && _dataDir == dataDir
+            _running && _listenPort == listenPort && _upstreamPort == upstreamPort && _previewPort == previewPort && _nativePreviewPort == nativePreviewPort && _dataDir == dataDir
         }
         if alreadyRunning {
             stateLock.withLock { _modelCatalog = modelCatalog }
@@ -100,6 +104,8 @@ final class ScienceAuthProxy: @unchecked Sendable {
         stateLock.withLock {
             _listenPort = listenPort
             _upstreamPort = upstreamPort
+            _previewPort = previewPort
+            _nativePreviewPort = nativePreviewPort
             _dataDir = dataDir
             _cookies = nil
             _lastAuthFailure = nil
@@ -118,17 +124,31 @@ final class ScienceAuthProxy: @unchecked Sendable {
             throw ScienceAuthProxyError.sessionBootstrapFailed(details: details)
         }
 
+        // 会话可用不代表独立预览端口可用；桥接页不兼容时也不能误报启动成功。
+        let previewRequest = Data("GET /mcp_apps HTTP/1.1\r\nHost: localhost:\(nativePreviewPort)\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n".utf8)
+        guard let previewRaw = await Self.tcpRoundTrip(host: "127.0.0.1", port: nativePreviewPort, request: previewRequest),
+              Self.previewResponse(previewRaw, publicPort: listenPort) != nil else {
+            stop()
+            throw ScienceAuthProxyError.previewBootstrapFailed(port: nativePreviewPort)
+        }
+
         var started: [NWListener] = []
         do {
             // 主监听（IPv4）必须 bind 成功，否则接管无意义 → 抛错让上层清理并报错。
             started.append(try await makeReadyListener(host: "127.0.0.1", port: listenPort))
+            started.append(try await makeReadyListener(host: "127.0.0.1", port: previewPort, preview: true))
         } catch {
+            let failedPort = started.isEmpty ? listenPort : previewPort
+            started.forEach { $0.cancel() }
             stateLock.withLock { _running = false }
-            authProxyLog.error("ScienceAuthProxy bind :\(listenPort) failed: \(error.localizedDescription, privacy: .public)")
-            throw ScienceAuthProxyError.listenFailed(port: listenPort)
+            authProxyLog.error("ScienceAuthProxy bind :\(failedPort) failed: \(error.localizedDescription, privacy: .public)")
+            throw ScienceAuthProxyError.listenFailed(port: failedPort)
         }
         // IPv6 尽力而为（部分环境无 ::1，不致命）。
         if let v6 = try? await makeReadyListener(host: "::1", port: listenPort) {
+            started.append(v6)
+        }
+        if let v6 = try? await makeReadyListener(host: "::1", port: previewPort, preview: true) {
             started.append(v6)
         }
         stateLock.withLock { listeners = started }
@@ -200,7 +220,7 @@ final class ScienceAuthProxy: @unchecked Sendable {
     }
 
     /// 建监听并等待其到达 .ready（或 .failed 抛错）后才返回，确保「返回即已 bind」。
-    private func makeReadyListener(host: String, port: Int) async throws -> NWListener {
+    private func makeReadyListener(host: String, port: Int, preview: Bool = false) async throws -> NWListener {
         let params = NWParameters.tcp
         params.allowLocalEndpointReuse = true
         guard let nwPort = NWEndpoint.Port(rawValue: UInt16(port)) else {
@@ -210,7 +230,10 @@ final class ScienceAuthProxy: @unchecked Sendable {
         let listener = try NWListener(using: params)
         listener.newConnectionHandler = { [weak self] conn in
             guard let self else { conn.cancel(); return }
-            Task { await self.handleClient(conn) }
+            Task {
+                if preview { await self.handlePreview(conn) }
+                else { await self.handleClient(conn) }
+            }
         }
 
         let once = ResumeOnce()
@@ -451,6 +474,26 @@ final class ScienceAuthProxy: @unchecked Sendable {
 
     // MARK: - 每连接处理
 
+    /// 独立 origin 只提供官方桥接页，绝不代理 API、WS、nonce 或 cookie。
+    private func handlePreview(_ conn: NWConnection) async {
+        conn.start(queue: .global())
+        defer { conn.cancel() }
+        guard let (head, _) = await Self.recvUntilHeaderEnd(conn),
+              let req = Self.parseRequestHead(head) else { return }
+        guard req.method == "GET", req.pathOnly == "/mcp_apps", !req.isWebSocketUpgrade else {
+            await Self.send(conn, data: Self.plainResponse(status: 404, text: "Not found"))
+            return
+        }
+        let port = stateLock.withLock { _nativePreviewPort }
+        let request = Data("GET \(req.path) HTTP/1.1\r\nHost: localhost:\(port)\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n".utf8)
+        guard let raw = await Self.tcpRoundTrip(host: "127.0.0.1", port: port, request: request),
+              let response = Self.previewResponse(raw, publicPort: stateLock.withLock { _listenPort }) else {
+            await Self.send(conn, data: Self.plainResponse(status: 503, text: "Science preview bridge is unavailable or incompatible"))
+            return
+        }
+        await Self.send(conn, data: response)
+    }
+
     private func handleClient(_ conn: NWConnection) async {
         conn.start(queue: .global())
         defer { conn.cancel() }
@@ -486,25 +529,31 @@ final class ScienceAuthProxy: @unchecked Sendable {
         }
 
         // 转发（上游 401 / 302→/login 视为会话失效 → 重铸 cookie 重试一次）。
-        let respData = await forwardHTTP(req: req, body: body, allowRetry: true)
-        await Self.send(conn, data: respData)
+        await forwardHTTP(req: req, body: body, client: conn, allowRetry: true)
     }
 
-    /// 普通 HTTP 转发：重写头（注 cookie / Host），上游 Connection: close 读满响应，按需给浏览器补 Set-Cookie。
-    private func forwardHTTP(req: ParsedRequest, body: Data, allowRetry: Bool) async -> Data {
+    /// 先检查响应头与会话，再分块转发正文，避免大型 MCP App/文件被截断或整体驻留内存。
+    private func forwardHTTP(req: ParsedRequest, body: Data, client: NWConnection, allowRetry: Bool) async {
         guard let cookie = ensureCookies(forceRefresh: false) else {
             let details = stateLock.withLock { _lastAuthFailure?.summary ?? "no session cookie" }
-            return Self.plainResponse(
+            await Self.send(client, data: Self.plainResponse(
                 status: 503,
                 text: "Science authentication unavailable (\(details))"
-            )
+            ))
+            return
         }
         let port = upstreamPort
         let upstreamReq = buildUpstreamRequest(req: req, body: body, cookie: cookie, websocket: false)
-
-        guard let resp = await Self.tcpRoundTrip(host: "127.0.0.1", port: port, request: upstreamReq),
-              let head = Self.httpHeadString(resp) else {
-            return Self.plainResponse(status: 502, text: "Science daemon unreachable")
+        guard let nwPort = NWEndpoint.Port(rawValue: UInt16(port)) else { return }
+        let upstream = NWConnection(host: "127.0.0.1", port: nwPort, using: .tcp)
+        upstream.start(queue: .global())
+        defer { upstream.cancel() }
+        guard await Self.send(upstream, data: upstreamReq),
+              let (headData, leftover) = await Self.recvUntilHeaderEnd(upstream),
+              headData.range(of: Data([13, 10, 13, 10])) != nil,
+              let head = Self.httpHeadString(headData) else {
+            await Self.send(client, data: Self.plainResponse(status: 502, text: "Science daemon unreachable"))
+            return
         }
 
         // 会话失效检测：401，或 3xx 重定向到 /login。
@@ -512,17 +561,26 @@ final class ScienceAuthProxy: @unchecked Sendable {
         let location = Self.headerValue("location", in: head) ?? ""
         let sessionInvalid = status == 401 || ((300..<400).contains(status) && location.contains("/login"))
         if sessionInvalid, allowRetry {
+            upstream.cancel()
             guard ensureCookies(forceRefresh: true) != nil else {
                 let details = stateLock.withLock { _lastAuthFailure?.summary ?? "session refresh failed" }
-                return Self.plainResponse(
+                await Self.send(client, data: Self.plainResponse(
                     status: 503,
                     text: "Science authentication refresh failed (\(details))"
-                )
+                ))
+                return
             }
-            return await forwardHTTP(req: req, body: body, allowRetry: false)
+            await forwardHTTP(req: req, body: body, client: client, allowRetry: false)
+            return
         }
 
-        return rewriteResponseForClient(resp: resp, head: head, cookie: cookie)
+        guard await Self.send(client, data: rewriteResponseForClient(resp: headData, head: head, cookie: cookie)) else { return }
+        if !leftover.isEmpty, !(await Self.send(client, data: leftover)) { return }
+        while true {
+            let (chunk, done) = await Self.recvChunkWithCompletion(upstream)
+            if let chunk, !chunk.isEmpty, !(await Self.send(client, data: chunk)) { return }
+            if done || chunk == nil { return }
+        }
     }
 
     // MARK: - WebSocket 隧道
@@ -568,11 +626,15 @@ final class ScienceAuthProxy: @unchecked Sendable {
         // 原样保留除 host / cookie / origin / referer / connection（普通请求）外的所有头；WS 保留 connection/upgrade。
         for (name, value) in req.headerPairs {
             let lower = name.lowercased()
-            if lower == "host" || lower == "cookie" || lower == "origin" || lower == "referer" { continue }
+            if lower == "host" || lower == "cookie" || lower == "origin" || lower == "referer"
+                || lower == "x-forwarded-host" || lower == "x-forwarded-proto" { continue }
             if !websocket, lower == "connection" { continue }
             lines += "\(name): \(value)\r\n"
         }
         lines += "Host: localhost:\(port)\r\n"
+        // 原生 OAuth 根据 forwarded host 生成回调。必须指向公开入口，不能泄露内部端口。
+        lines += "X-Forwarded-Host: localhost:\(stateLock.withLock { _listenPort })\r\n"
+        lines += "X-Forwarded-Proto: http\r\n"
         // Origin：浏览器对非 GET / WS 会带；一律改写为 daemon 自身 origin。
         if req.headerPairs.contains(where: { $0.name.lowercased() == "origin" }) || websocket {
             lines += "Origin: \(upstreamOrigin)\r\n"
@@ -639,7 +701,7 @@ final class ScienceAuthProxy: @unchecked Sendable {
 // MARK: - ResumeOnce（确保 continuation 只被恢复一次）
 
 /// NWListener 状态可能多次回调；用它保证对应 continuation 只 resume 一次，避免崩溃。
-private final class ResumeOnce {
+nonisolated private final class ResumeOnce: @unchecked Sendable {
     private let lock = NSLock()
     private var done = false
     func claim() -> Bool {
@@ -655,6 +717,7 @@ private final class ResumeOnce {
 enum ScienceAuthProxyError: LocalizedError {
     case listenFailed(port: Int)
     case sessionBootstrapFailed(details: String)
+    case previewBootstrapFailed(port: Int)
 
     var errorDescription: String? {
         switch self {
@@ -667,6 +730,11 @@ enum ScienceAuthProxyError: LocalizedError {
             return AppSettings.shared.t(
                 "Claude Science login session bootstrap failed (\(details)).",
                 "Claude Science 登录会话初始化失败（\(details)）。"
+            )
+        case .previewBootstrapFailed(let port):
+            return AppSettings.shared.t(
+                "Claude Science preview on port \(port) is unavailable or incompatible. Restart Science or check its installed version.",
+                "Claude Science 端口 \(port) 的预览服务不可用或不兼容，请重启 Science 或检查已安装版本。"
             )
         }
     }

@@ -23,7 +23,7 @@ struct ScienceModelCatalog: Sendable, Equatable {
 /// Mode-independent port/data-dir plan for the public Science entry and its
 /// private daemon. Kept as a value type so lifecycle code and regressions share
 /// the same collision rules.
-struct ScienceProxyEndpointPlan: Sendable, Equatable {
+nonisolated struct ScienceProxyEndpointPlan: Sendable, Equatable {
     enum Mode: Sendable {
         case sandbox
         case adopt
@@ -37,12 +37,14 @@ struct ScienceProxyEndpointPlan: Sendable, Equatable {
     let mode: Mode
     let publicPort: Int
     let daemonPort: Int
+    let previewPort: Int
+    let nativePreviewPort: Int
     let dataDir: String
 
     var adopting: Bool { mode == .adopt }
 
     func validationIssue(proxyPort: Int, reservedPorts: Set<Int>) -> ValidationIssue? {
-        guard Set([proxyPort, publicPort, daemonPort]).count == 3 else {
+        guard Set([proxyPort, publicPort, daemonPort, previewPort, nativePreviewPort]).count == 5 else {
             return .duplicatePort
         }
         if reservedPorts.contains(proxyPort)
@@ -157,6 +159,31 @@ struct ParsedRequest {
 }
 
 extension ScienceAuthProxy {
+    /// 只改写官方预览桥接页：保留 opaque iframe 和 CSP 的其他限制，不注入会话 cookie。
+    static func previewResponse(_ raw: Data, publicPort: Int) -> Data? {
+        guard let response = parseHTTPResponse(raw), response.statusCode == 200,
+              response.header("content-type")?.lowercased().contains("text/html") == true,
+              response.header("content-encoding") == nil || response.header("content-encoding") == "identity",
+              var html = String(data: response.body, encoding: .utf8),
+              let range = html.range(of: #"const\s+ALLOWED_PARENT_ORIGINS\s*=\s*\[[^\]]*\]"#, options: .regularExpression),
+              let policy = response.header("content-security-policy"),
+              let ancestors = policy.range(of: #"frame-ancestors[^;]*"#, options: .regularExpression) else { return nil }
+        let origins = ["http://localhost:\(publicPort)", "http://127.0.0.1:\(publicPort)"]
+        guard let encoded = try? JSONSerialization.data(withJSONObject: origins, options: [.withoutEscapingSlashes]),
+              let json = String(data: encoded, encoding: .utf8) else { return nil }
+        html.replaceSubrange(range, with: "const ALLOWED_PARENT_ORIGINS = " + json)
+        var scopedPolicy = policy
+        scopedPolicy.replaceSubrange(ancestors, with: "frame-ancestors " + origins.joined(separator: " "))
+        let body = Data(html.utf8)
+        var head = "HTTP/1.1 200 OK\r\n"
+        let replaced = Set(["content-security-policy", "content-length", "transfer-encoding", "content-encoding", "connection", "set-cookie", "etag", "content-md5"])
+        for header in response.headers where !replaced.contains(header.name.lowercased()) {
+            head += "\(header.name): \(header.value)\r\n"
+        }
+        head += "Content-Security-Policy: \(scopedPolicy)\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n"
+        return Data(head.utf8) + body
+    }
+
     // MARK: - HTTP 解析
 
     /// Build both known nonce exchange shapes in compatibility order. Claude
@@ -538,9 +565,10 @@ extension ScienceAuthProxy {
         }
     }
 
-    static func send(_ conn: NWConnection, data: Data) async {
-        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-            conn.send(content: data, completion: .contentProcessed { _ in cont.resume() })
+    @discardableResult
+    static func send(_ conn: NWConnection, data: Data) async -> Bool {
+        await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            conn.send(content: data, completion: .contentProcessed { error in cont.resume(returning: error == nil) })
         }
     }
 
@@ -548,8 +576,11 @@ extension ScienceAuthProxy {
     static func tcpRoundTrip(host: String, port: Int, request: Data) async -> Data? {
         guard let nwPort = NWEndpoint.Port(rawValue: UInt16(port)) else { return nil }
         let conn = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: .tcp)
+        // 仅用于探活和小型桥接页；daemon 无响应时也要结束启动检查。
+        let timeout = DispatchWorkItem { conn.cancel() }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 8, execute: timeout)
         conn.start(queue: .global())
-        defer { conn.cancel() }
+        defer { timeout.cancel(); conn.cancel() }
         await send(conn, data: request)
 
         var acc = Data()
@@ -575,7 +606,7 @@ extension ScienceAuthProxy {
     static func pump(from: NWConnection, to: NWConnection) async {
         while true {
             let (chunk, done) = await recvChunkWithCompletion(from)
-            if let chunk, !chunk.isEmpty { await send(to, data: chunk) }
+            if let chunk, !chunk.isEmpty, !(await send(to, data: chunk)) { return }
             if done || chunk == nil { return }
         }
     }

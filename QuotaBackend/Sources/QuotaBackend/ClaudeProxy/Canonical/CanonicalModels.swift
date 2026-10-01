@@ -83,6 +83,7 @@ public struct CanonicalStop: Sendable {
 }
 
 public struct CanonicalGenerationConfig: Sendable {
+    public let reasoningEffort: String?
     public let maxOutputTokens: Int?
     public let temperature: Double?
     public let topP: Double?
@@ -96,7 +97,8 @@ public struct CanonicalGenerationConfig: Sendable {
         topP: Double? = nil,
         topK: Int? = nil,
         stopSequences: [String] = [],
-        stream: Bool? = nil
+        stream: Bool? = nil,
+        reasoningEffort: String? = nil
     ) {
         self.maxOutputTokens = maxOutputTokens
         self.temperature = temperature
@@ -104,6 +106,7 @@ public struct CanonicalGenerationConfig: Sendable {
         self.topK = topK
         self.stopSequences = stopSequences
         self.stream = stream
+        self.reasoningEffort = reasoningEffort
     }
 }
 

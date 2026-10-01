@@ -204,6 +204,9 @@ final class ClaudeProxyConverterTests: XCTestCase {
     }
 
     func testScienceAliasIsDeterministicAndCaseSensitive() {
+        let adapter = ScienceModelProtocolAdapter(upstreamModels: ["default", "gpt-test"], requestedDefault: "default")
+        XCTAssertTrue(adapter.models[1].id.hasPrefix("claude-opus-4-8-aiusage-v2-"))
+        XCTAssertEqual(adapter.resolveRequestModel(ScienceModelProtocolAdapter.generatedSelectionID(for: "gpt-test"), acceptingRawUpstreamIDs: false), "gpt-test")
         XCTAssertEqual(
             ScienceModelProtocolAdapter.generatedSelectionID(for: "ZhipuAI/GLM-5.2"),
             ScienceModelProtocolAdapter.generatedSelectionID(for: "ZhipuAI/GLM-5.2")

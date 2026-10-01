@@ -37,6 +37,8 @@ public struct ScienceModelProtocolAdapter: Sendable {
 
     /// Some Science releases accept only Claude-shaped model IDs.
     static let generatedIDPrefix = "claude-aiusage-v1-"
+    // Science 根据 Opus 版本识别 effort 能力；此 ID 仅用于本地传输。
+    static let effortSelectionPrefix = "claude-opus-4-8-aiusage-v2-"
     /// Desktop infers Effort / Thinking from Claude family SKUs
     /// (`claude-opus-*`, `claude-sonnet-*`, `claude-haiku-*`, `claude-fable-*`).
     /// Compact `claude-aiusage*` IDs pass the third-party blacklist but never
@@ -111,7 +113,7 @@ public struct ScienceModelProtocolAdapter: Sendable {
             case .science:
                 id = upstream == preferred
                     ? Self.persistentDefaultSelectionID
-                    : Self.generatedSelectionID(for: upstream)
+                    : Self.effortSelectionID(for: upstream)
             case .desktop:
                 id = Self.desktopSelectionID(for: upstream)
             case .code:
@@ -127,6 +129,9 @@ public struct ScienceModelProtocolAdapter: Sendable {
                 displayName = Self.productPresentationName(for: upstream)
             }
             routing[id] = upstream
+            if routeStyle == .science {
+                routing[Self.generatedSelectionID(for: upstream)] = upstream
+            }
             return Model(
                 id: id,
                 upstreamModel: upstream,
@@ -172,6 +177,7 @@ public struct ScienceModelProtocolAdapter: Sendable {
             }
         }
         if base.hasPrefix(Self.generatedIDPrefix)
+            || base.hasPrefix(Self.effortSelectionPrefix)
             || base.contains("-aiusage-v1-") {
             return defaultUpstreamModel
         }
@@ -195,7 +201,7 @@ public struct ScienceModelProtocolAdapter: Sendable {
         return result
     }
 
-    static func generatedSelectionID(for upstreamModel: String) -> String {
+    public static func generatedSelectionID(for upstreamModel: String) -> String {
         var hash: UInt64 = 14_695_981_039_346_656_037
         for byte in upstreamModel.utf8 {
             hash ^= UInt64(byte)
@@ -219,6 +225,11 @@ public struct ScienceModelProtocolAdapter: Sendable {
         slug = slug.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
         if slug.isEmpty { slug = "model" }
         return "\(generatedIDPrefix)\(slug)-\(String(hash, radix: 16))"
+    }
+
+    static func effortSelectionID(for upstreamModel: String) -> String {
+        // 不暴露上游名字，避免客户端将第三方模型识别为不支持思考。
+        effortSelectionPrefix + stableHashDecimal(upstreamModel)
     }
 
     /// Claude Desktop validates the complete model list and accepts only

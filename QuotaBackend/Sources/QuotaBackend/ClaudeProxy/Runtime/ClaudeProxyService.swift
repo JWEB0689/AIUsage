@@ -284,7 +284,8 @@ public actor ClaudeProxyService {
                 topP: request.generationConfig.topP,
                 topK: request.generationConfig.topK,
                 stopSequences: request.generationConfig.stopSequences,
-                stream: request.generationConfig.stream
+                stream: request.generationConfig.stream,
+                reasoningEffort: request.generationConfig.reasoningEffort
             ),
             metadata: request.metadata,
             rawExtensions: request.rawExtensions

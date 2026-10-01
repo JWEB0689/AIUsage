@@ -60,7 +60,7 @@ private struct ShimmerModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .overlay(
-                LinearGradient(
+                AnyView(LinearGradient(
                     stops: [
                         .init(color: .clear, location: max(0, phase - 0.3)),
                         .init(color: .white.opacity(0.12), location: phase),
@@ -68,7 +68,7 @@ private struct ShimmerModifier: ViewModifier {
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
-                )
+                ))
                 .blendMode(.screen)
             )
             .clipShape(RoundedRectangle(cornerRadius: 8))
