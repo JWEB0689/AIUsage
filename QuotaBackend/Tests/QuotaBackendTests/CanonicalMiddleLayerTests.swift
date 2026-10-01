@@ -4,6 +4,30 @@ import XCTest
 
 final class CanonicalMiddleLayerTests: XCTestCase {
 
+    func testScienceEffortSurvivesBothOpenAIProtocols() throws {
+        for effort in ["low", "medium", "high", "max"] {
+            for streaming in [false, true] {
+                let request = ClaudeMessageRequest(
+                    model: "claude-opus-4-8-aiusage-v2-123",
+                    messages: [ClaudeMessage(role: "user", content: .text("hello"))],
+                    maxTokens: 1024,
+                    stream: streaming,
+                    outputConfig: ClaudeOutputConfig(effort: effort)
+                )
+                let canonical = try CanonicalRequestMapper().mapClaude(request)
+                let builder = CanonicalOpenAIRequestBuilder()
+                let chat = try builder.buildChatCompletionRequest(from: canonical).payload
+                let responses = try builder.buildResponsesRequest(from: canonical).payload
+                let chatJSON = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(chat)) as? [String: Any])
+                let responsesJSON = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(responses)) as? [String: Any])
+                XCTAssertEqual(chatJSON["reasoning_effort"] as? String, effort)
+                XCTAssertEqual((responsesJSON["reasoning"] as? [String: Any])?["effort"] as? String, effort)
+                XCTAssertEqual(chat.stream, streaming)
+                XCTAssertEqual(responses.stream, streaming)
+            }
+        }
+    }
+
     func testCanonicalClaudeRequestMappingPreservesToolConfigAndRichItems() throws {
         let mapper = CanonicalRequestMapper()
         let request = ClaudeMessageRequest(

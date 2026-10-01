@@ -175,7 +175,8 @@ public struct CanonicalOpenAIRequestBuilder {
             tools: buildChatTools(from: request.tools, lossyNotes: &lossyNotes),
             toolChoice: buildChatToolChoice(from: request.toolConfig?.choice, lossyNotes: &lossyNotes),
             parallelToolCalls: request.toolConfig?.parallelCallsAllowed,
-            promptCacheKey: cacheKey
+            promptCacheKey: cacheKey,
+            reasoningEffort: request.generationConfig.reasoningEffort
         )
         return CanonicalBuildResult(payload: payload, lossyNotes: lossyNotes)
     }
@@ -297,7 +298,8 @@ public struct CanonicalOpenAIRequestBuilder {
                 tools: tools,
                 lossyNotes: &lossyNotes
             ),
-            parallelToolCalls: request.toolConfig?.parallelCallsAllowed
+            parallelToolCalls: request.toolConfig?.parallelCallsAllowed,
+            reasoning: request.generationConfig.reasoningEffort.map { .init(effort: $0) }
         )
         return CanonicalBuildResult(payload: payload, lossyNotes: lossyNotes)
     }

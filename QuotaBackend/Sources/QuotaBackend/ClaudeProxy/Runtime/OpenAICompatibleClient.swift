@@ -166,7 +166,9 @@ public actor OpenAICompatibleClient {
             stream: false,
             tools: request.tools,
             toolChoice: request.toolChoice,
-            parallelToolCalls: request.parallelToolCalls
+            parallelToolCalls: request.parallelToolCalls,
+            promptCacheKey: request.promptCacheKey,
+            reasoningEffort: request.reasoningEffort
         )
 
         let urlRequest = try makeJSONRequest(path: "/chat/completions", body: nonStreamRequest)
@@ -202,7 +204,9 @@ public actor OpenAICompatibleClient {
                 stream: false,
                 tools: request.tools,
                 toolChoice: request.toolChoice,
-                parallelToolCalls: request.parallelToolCalls
+                parallelToolCalls: request.parallelToolCalls,
+                promptCacheKey: request.promptCacheKey,
+                reasoningEffort: request.reasoningEffort
             )
             return try await sendChatCompletionViaChatCompletions(
                 request: retryRequest,
@@ -233,7 +237,9 @@ public actor OpenAICompatibleClient {
             streamOptions: .init(includeUsage: true),
             tools: request.tools,
             toolChoice: request.toolChoice,
-            parallelToolCalls: request.parallelToolCalls
+            parallelToolCalls: request.parallelToolCalls,
+            promptCacheKey: request.promptCacheKey,
+            reasoningEffort: request.reasoningEffort
         )
 
         let urlRequest = try makeJSONRequest(path: "/chat/completions", body: streamRequest)
@@ -260,7 +266,9 @@ public actor OpenAICompatibleClient {
                     streamOptions: .init(includeUsage: true),
                     tools: request.tools,
                     toolChoice: request.toolChoice,
-                    parallelToolCalls: request.parallelToolCalls
+                    parallelToolCalls: request.parallelToolCalls,
+                    promptCacheKey: request.promptCacheKey,
+                    reasoningEffort: request.reasoningEffort
                 )
                 try await streamViaChatCompletions(
                     request: retryRequest,
@@ -367,7 +375,8 @@ public actor OpenAICompatibleClient {
                 store: request.store,
                 tools: request.tools,
                 toolChoice: request.toolChoice,
-                parallelToolCalls: request.parallelToolCalls
+                parallelToolCalls: request.parallelToolCalls,
+                reasoning: request.reasoning
             )
             return try await sendResponsesRequest(
                 request: retryRequest,
@@ -410,7 +419,8 @@ public actor OpenAICompatibleClient {
                     store: request.store,
                     tools: request.tools,
                     toolChoice: request.toolChoice,
-                    parallelToolCalls: request.parallelToolCalls
+                    parallelToolCalls: request.parallelToolCalls,
+                    reasoning: request.reasoning
                 )
                 try await streamResponsesRequest(
                     request: retryRequest,

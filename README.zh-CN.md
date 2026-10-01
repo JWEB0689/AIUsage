@@ -241,7 +241,7 @@ AIUsage 为 **Claude**、**Codex（Codex CLI）** 与 **OpenCode** 提供原生�
 
 ### Claude Science 代理
 
-免 Claude 订阅启动本地 [Claude Science](https://claude.com)，把它的推理经本地代理导向你自选的第三方模型，同时保留工具调用、Skill、MCP、代码执行等原生体验。仅供个人学习研究，使用者自负风险。
+无需 Claude 账号或订阅，启动本地 [Claude Science](https://claude.com)，把推理经本地代理导向你自选的第三方模型。本地技能的创建、导入、编辑和使用，以及自定义 MCP 连接器均不依赖云目录。仅供个人学习研究，使用者自负风险。
 
 | 能力 | 说明 |
 |------|------|
@@ -249,6 +249,8 @@ AIUsage 为 **Claude**、**Codex（Codex CLI）** 与 **OpenCode** 提供原生�
 | **推理走第三方** | 通过 `ANTHROPIC_BASE_URL` 把推理导向复用的本地 `QuotaServer`，剥离入站 OAuth、注入你的第三方 Key，按 opus/sonnet/haiku 档位映射到节点真实模型 |
 | **隔离沙箱** | 独立 HOME / 端口（14410）/ data-dir / 钥匙串，与真实实例零影响；浏览器一键打开已登录页 |
 | **接管真实实例（可选）** | 由 8765 反向代理 + 独立内部 daemon（14411）让**双击桌面 app 也免登录**；会话初始化兼容新版 daemon 的响应/cookie 格式，上游认证变化时只输出脱敏诊断 |
+| **技能与 MCP** | 本地技能创建、导入、编辑及自定义 MCP 无需 Claude 登录；保留内置技能，预览保持独立 origin，大型 MCP App 资源分块转发 |
+| **思考强度** | 默认与非默认模型均保留用户选择的 effort，兼容 Anthropic、OpenAI Chat Completions 和 Responses 请求路径 |
 | **复用节点池** | 与 Claude Code 代理共享 Claude 家族节点；运行时热切换上游，Science 无感 |
 
 **快速开始：** 先在 Claude Code 代理页备好一个上游节点 → 打开 AIUsage → Claude Science 代理 → 选择节点 → 一键开始，浏览器自动打开已登录的 Science。技术细节见 [docs/CLAUDE_SCIENCE_INTEGRATION.md](docs/CLAUDE_SCIENCE_INTEGRATION.md)。

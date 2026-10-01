@@ -32,6 +32,7 @@ private struct ScienceAuthProxyRegression {
         try testSafeRedirects()
         try testDiagnosticRedaction()
         try testEndpointPlans()
+        try testPreviewIsolation()
         try testModelCatalogResponse()
         try testSelectionNormalization()
         try testManagedDaemonGuard()
@@ -173,12 +174,16 @@ private struct ScienceAuthProxyRegression {
             mode: .sandbox,
             publicPort: 14410,
             daemonPort: 14412,
+            previewPort: 14413,
+            nativePreviewPort: 14415,
             dataDir: "/tmp/aiusage-science-sandbox"
         )
         let adopt = ScienceProxyEndpointPlan(
             mode: .adopt,
             publicPort: 8765,
             daemonPort: 14411,
+            previewPort: 14414,
+            nativePreviewPort: 14416,
             dataDir: "/tmp/aiusage-science-adopt"
         )
 
@@ -195,12 +200,30 @@ private struct ScienceAuthProxyRegression {
             mode: .sandbox,
             publicPort: 14411,
             daemonPort: 14412,
+            previewPort: 14413,
+            nativePreviewPort: 14415,
             dataDir: sandbox.dataDir
         )
         try expect(reservedPublic.validationIssue(proxyPort: 14402, reservedPorts: reserved) == .reservedPort,
                    "Sandbox public port was allowed to occupy an internal port")
         try expect(sandbox.validationIssue(proxyPort: 14412, reservedPorts: reserved) == .duplicatePort,
                    "Proxy/internal duplicate was not rejected before reserved-port handling")
+        try expect(sandbox.validationIssue(proxyPort: 14413, reservedPorts: reserved) == .duplicatePort,
+                   "Proxy/preview collision was not rejected")
+    }
+
+    private static func testPreviewIsolation() throws {
+        let body = "<script>const ALLOWED_PARENT_ORIGINS = [\"http://localhost:14412\"]; const SAFE_SANDBOX_TOKENS = ['allow-scripts'];</script>"
+        let raw = Data("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Security-Policy: default-src 'self'; frame-ancestors http://localhost:14412; frame-src 'none'\r\nSet-Cookie: operon_auth=must-not-leak\r\nContent-Length: \(body.utf8.count)\r\n\r\n\(body)".utf8)
+        let rewritten = try unwrap(ScienceAuthProxy.previewResponse(raw, publicPort: 14410), "Preview bridge did not adapt")
+        let response = try unwrap(ScienceAuthProxy.parseHTTPResponse(rewritten), "Preview response was malformed")
+        let html = String(data: response.body, encoding: .utf8) ?? ""
+        try expect(html.contains("http://localhost:14410") && html.contains("http://127.0.0.1:14410"), "Public origins are missing")
+        try expect(!html.contains("14412") && html.contains("SAFE_SANDBOX_TOKENS"), "Preview isolation was changed")
+        try expect(response.header("set-cookie") == nil, "Preview origin received a session cookie")
+        try expect(response.header("content-security-policy")?.contains("frame-src 'none'") == true, "Unrelated CSP was relaxed")
+        try expect(response.header("content-length") == String(response.body.count), "Preview content length was not updated")
+        try expect(ScienceAuthProxy.previewResponse(Data("HTTP/1.1 200 OK\r\n\r\nunknown".utf8), publicPort: 14410) == nil, "Unknown bridge must fail closed")
     }
 
     private static func testModelCatalogResponse() throws {
@@ -380,6 +403,18 @@ private struct ScienceAuthProxyRegression {
             managedDataDirs: [dataDir.path]
         )
         try expect(second.normalizedFrameCount == 0, "Selection normalization was not idempotent")
+
+        let effortAlias = "claude-opus-4-8-aiusage-v2-123"
+        let migrated = try ScienceSelectionNormalizer.normalize(
+            dataDir: dataDir.path,
+            currentModelIDs: [ScienceSelectionNormalizer.persistentDefaultSelectionID, effortAlias],
+            replacementModelIDs: [currentAlias: effortAlias],
+            managedDataDirs: [dataDir.path]
+        )
+        try expect(migrated.normalizedFrameCount == 1, "Legacy effort alias was not migrated")
+        let migratedSnapshot = try frameSnapshot(supportedDB.path)
+        try expect(migratedSnapshot["child-current"]?.model == effortAlias, "Migration changed the selected upstream model")
+        try expect(migratedSnapshot.mapValues(\.rootSeq) == before.mapValues(\.rootSeq), "Migration reordered session frames")
 
         do {
             _ = try ScienceSelectionNormalizer.normalize(

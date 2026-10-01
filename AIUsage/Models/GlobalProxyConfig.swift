@@ -202,8 +202,13 @@ struct GlobalProxyConfig: Codable, Equatable {
     /// 默认沙箱的内部 daemon 端口。浏览器只访问 `defaultScienceListenPort`，
     /// `ScienceAuthProxy` 在二者之间反代并提供即时模型目录。
     static let defaultScienceSandboxInternalPort = 14412
+    /// 无会话凭证的独立 HTML/MCP 预览入口。
+    static let defaultSciencePreviewPort = 14413
+    static let adoptedSciencePreviewPort = 14414
+    static let nativeSciencePreviewPort = 14415
+    static let adoptedNativeSciencePreviewPort = 14416
     /// 默认沙箱工作区 id（稳定；旧 `science-sandbox/home` 迁移到此）。
-    static let defaultScienceWorkspaceId = "default"
+    nonisolated static let defaultScienceWorkspaceId = "default"
     /// 默认工作区显示名（英文存盘；UI 可本地化展示）。
     static let defaultScienceWorkspaceName = "Default"
     // 假账号邮箱缺省值（兼容旧配置；运行时由工作区 id 派生覆盖）。
@@ -226,9 +231,9 @@ struct GlobalProxyConfig: Codable, Equatable {
     }
     // 接管真实实例模式下 Science 对外固定端口（= 桌面 app 默认端口）：由本地反向代理（ScienceAuthProxy）占用，
     // 负责给每个请求注入 operon 会话 cookie，使双击桌面 app / 浏览器打开 8765 都免登录。
-    static let realInstancePort = 8765
+    nonisolated static let realInstancePort = 8765
     // 接管模式下内部 Claude Science daemon 的监听端口（反代把 8765 的流量转发到这里）。
-    static let realInstanceInternalPort = 14411
+    nonisolated static let realInstanceInternalPort = 14411
     // Codex / OpenCode 对客户端只发布一个稳定入口名；LLM 是可编辑入口名的默认值。
     static let defaultClientModel = "LLM"
     static let defaultVirtualModel = defaultClientModel

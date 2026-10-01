@@ -4,6 +4,18 @@
 
 ## 1. 概述
 
+### Issue #78：技能目录与思考强度
+
+- Science 非默认选择使用 `claude-opus-4-8-aiusage-v2-<hash>`，使 daemon 的 Opus 能力判断保留用户选择的 effort。真实模型只用于本地路由；旧 v1 别名继续精确解析，已保存会话按同一上游迁移，保留 `root_seq`。
+- `output_config.effort` 经 Canonical 中间层保留，Chat Completions 输出 `reasoning_effort`，Responses 输出 `reasoning.effort`；输出 token 上限调整不能丢失该参数。
+- 本地身份使用 `provider=aiusage_local`，不冒充 Claude 云账号。旧虚拟身份自动迁移，保留账户、组织和历史会话路径；本地技能和自定义 MCP 不需要 Claude 登录。
+- 当前 Science 构建的推理仍要求非空 Bearer，因此保留本地虚拟 Bearer，并通过 Bun 原生 `BUN_OPTIONS --preload` 加载隔离目录内的请求守卫：这个 Bearer 只能发往 `ANTHROPIC_BASE_URL` 的 literal loopback origin，其余请求本地返回 401。原生 `caFetch` 将其视为未登录；由于本地 provider 不提供云账号证据，云目录保持健康空列表，内置技能与本地技能仍走原生实现。不修改 Science 二进制，不关闭沙箱或操作审批，不拦截 MCP 自己的凭证。
+- 不再提供云授权按钮，也不把云发布/同步、Anthropic 托管目录作为本地功能的前提。历史真实授权仍受防覆盖保护；绝不复制或写入真实 `~/.claude-science` 凭证。
+- 预览使用独立 origin：公开预览入口仅代理官方 `/mcp_apps` 桥接页，将 CSP `frame-ancestors` 和消息来源限制同步到公开 Science 端口，保留内层 opaque iframe 与权限收缩。它不代理 API/WS、不注入 cookie；启动前验证原生桥接页，版本不兼容时明确失败。
+- 普通 HTTP 响应先检查会话与响应头，再以 64 KiB 分块转发，避免旧 20 MiB 整体缓冲上限截断原生 MCP App 和大文件。仍保留失效会话重铸与一次重试。
+- 本机验收（2026-10-01，Science 20260630 构建）：无需 Claude 账号，技能目录 `degraded=false`、29 个内置技能可用；本地技能创建、导入、编辑、复制、读取、挂载通过，原生 `skill` 工具在真实对话中成功加载本地 `SKILL.md`。真实 Science 对话调用回环模拟接口并正常接收回复，保留 `high` effort。本地 stdio MCP 注册、连接、枚举及原生 Ketcher 工具调用通过；26,763,040 字节资源完整传输并被浏览器解析，预览握手与 Cookie 隔离通过。81 项后端相关测试、凭证/迁移/预览回归与 macOS 构建通过。10 万 frame、1000 模型的无迁移场景在同一预热测试中从约 1.9 秒降到 0.01 秒。
+- 对照官方 [CLI 设置](https://claude.com/docs/claude-science/command-line-settings) 与 [自定义连接器](https://claude.com/docs/claude-science/custom-connectors) 文档；验收使用本机已安装构建，未自动更新用户安装。
+
 「Claude Science 代理」是 AIUsage 的一条独立代理轨（`GlobalProxyTrack.science`）。目标：**免 Claude 订阅**启动本地的 Claude Science，把它的推理请求经本地 `QuotaServer` 导向你自选的第三方模型（任意 OpenAI 兼容 / Anthropic 端点），同时保留 Science 的工具调用、Skill、MCP、代码执行等原生体验。
 
 ```
@@ -36,6 +48,8 @@ Claude Science 的登录只是「启动门票」：登录后推理打到哪，�
 
 两种形态都采用“公开反代 → 内部 daemon”：推理统一经 14402；`ScienceAuthProxy` 注入本地 cookie、改写 Origin，并直接返回当前节点 `/api/models`。沙箱为 14410→14412，接管为 8765→14411；只有接管态会改写真实运行期 lock。
 
+预览走另一条无会话链路：沙箱 14413→14415，接管 14414→14416。`OPERON_SANDBOX_ORIGIN` 指向公开预览入口，`serve --sandbox-port` 指定原生预览端口，不把预览并入有会话权限的主页面 origin。
+
 ## 4. 端口与常量
 
 所有 Science 端口落在 AIUsage 自有的 **144xx 端口族**（区别于同类工具、避开常用端口）；对外唯一例外是 8765（桌面 app 硬编码默认端口）。定义见 `GlobalProxyConfig.swift`。
@@ -47,6 +61,8 @@ Claude Science 的登录只是「启动门票」：登录后推理打到哪，�
 | `realInstancePort` | 8765 | 接管态**对外端口**（= 桌面 app 默认），由反代 `ScienceAuthProxy` 占用 |
 | `realInstanceInternalPort` | 14411 | 接管态**内部 daemon** `serve --port`（反代转发目标） |
 | `defaultScienceSandboxInternalPort` | 14412 | 沙箱态**内部 daemon** `serve --port`（反代转发目标） |
+| `defaultSciencePreviewPort` / `nativeSciencePreviewPort` | 14413 / 14415 | 沙箱公开预览入口 / 原生预览服务 |
+| `adoptedSciencePreviewPort` / `adoptedNativeSciencePreviewPort` | 14414 / 14416 | 接管公开预览入口 / 原生预览服务 |
 | `defaultSandboxEmail` | `aiusage@cslocal.invalid` | 虚拟假账号（**必须以 `.invalid` 保留顶级域结尾**，RFC 2606 永不可解析）；每账号独立 data-dir 与对话历史 |
 | admin 路径 | `/__aiusage/admin/claude-upstream` | 进程内热切换上游（复用 Claude 轨路由） |
 
@@ -68,7 +84,7 @@ Claude Science 的登录只是「启动门票」：登录后推理打到哪，�
 4. 起公开反代并自探：
      ├─ 沙箱：ScienceAuthProxy.start(14410 → 14412)
      └─ 接管：ScienceAuthProxy.start(8765 → 14411) → ScienceRealAdopt.hijackLock
-     自探公开端口 GET / 返回 200 才落激活态，否则停反代/daemon/推理代理并还原运行期 lock
+     先验证原生预览桥接页，主入口与公开预览监听均 bind 成功，公开端口 GET / 返回 200 才落激活态；否则停反代/daemon/推理代理并还原运行期 lock
 5. 持久化激活态；浏览器直接打开公开端口（不再生成或绕行一次性 daemon URL）
 ```
 
@@ -78,10 +94,10 @@ Claude Science 启动或打开模型设置时会调用 Anthropic SDK 的 `models
 
 1. 优先读取活动节点的 `modelLibrary`；旧节点模型库为空时才回退 `defaultModel + big/middle/small`。
 2. 精确去重、保留顺序与大小写；拒绝空值、控制字符、超过 512 字节的 ID，最多 1000 项。
-3. 为兼容仍会过滤非 `claude-` ID 的 Science 版本，协议适配层发布 Claude 形态的本地选择 ID。当前节点默认项使用 Science 已持久化到旧 frame 的 `claude-opus-4-8` 作为**默认选择槽**，其他当前节点模型使用 `claude-aiusage-v1-<slug>-<fnv64>`。这个槽只代表“当前节点默认模型”，不保留旧模型、不会额外插入兼容项，picker 的条目数和顺序仍与当前节点目录一一对应。节点库真的包含同名 `claude-opus-4-8` 且它不是默认项时，该 raw 模型使用独立哈希 ID，因此不会重复或冲突。
+3. 为兼容仍会过滤非 `claude-` ID 的 Science 版本，协议适配层发布 Claude 形态的本地选择 ID。当前节点默认项使用 Science 已持久化到旧 frame 的 `claude-opus-4-8` 作为**默认选择槽**，其他当前节点模型使用 `claude-opus-4-8-aiusage-v2-<hash>`，使 daemon 保留所选 effort。这个槽只代表“当前节点默认模型”，不保留旧模型、不会额外插入兼容项，picker 的条目数和顺序仍与当前节点目录一一对应。节点库真的包含同名 `claude-opus-4-8` 且它不是默认项时，该 raw 模型使用独立哈希 ID，因此不会重复或冲突。
 4. Science 会把纯小写 kebab-case（如 `codex-auto-review`）主动显示成 `Internal`。AIUsage 只在 `name/display_name` 序列化时给会命中该规则的名称加一个不可见 U+2060 展示保护符；视觉上仍是原始模型 ID，保护符不会进入模型库、别名哈希、请求体、日志、计价或上游路由。
 5. 推理时选择 ID 在本地精确还原为真实模型 ID。当前节点不存在的旧缓存选择安全回退到新节点默认模型，不会误打到旧节点模型。
-6. 为使**旧会话也只引用当前目录**，启动前（daemon 已停）与热切换完成后，`ScienceSelectionNormalizer` 会把 AIUsage 自有 sandbox/adopt data-dir 中、不属于当前目录的 `claude-aiusage-v1-*` frame 选择事务性归一到持久默认槽。它绝不扫描/修改真实 `~/.claude-science`，也不改 raw/native ID；数据库 schema 或 `frames` trigger 不在已知白名单时整库跳过。Science 自带 `root_seq` UPDATE trigger 会被事务内临时值规避并在提交前逐行校验恢复，保证对话顺序不变。热切换归一与运行中的 daemon 并发访问同一数据库：SQLite busy timeout（3s）之外，命中 `database is locked / busy` 竞争时会退避 700ms 重试一次，仍失败则报「节点已切换，但无法更新已保存的模型选择」，切换本身不回滚。
+6. 为使**旧会话也只引用当前目录**，启动前（daemon 已停）与热切换完成后，`ScienceSelectionNormalizer` 对 AIUsage 自有 sandbox/adopt data-dir 中、不属于当前目录的 v1/v2 选择做事务性迁移：仍在当前节点的旧 v1 选择映射到同一模型的新选择 ID，失效选择回退持久默认槽。每库只扫描一次 frame，命中记录写入带模型索引的临时表，避免按每个模型反复扫全库。它绝不扫描/修改真实 `~/.claude-science`，也不改 raw/native ID；数据库 schema 或 `frames` trigger 不在已知白名单时整库跳过。Science 自带 `root_seq` UPDATE trigger 会被事务内临时值规避并在提交前逐行校验恢复，保证对话顺序不变。热切换归一与运行中的 daemon 并发访问同一数据库：SQLite busy timeout（3s）之外，命中 `database is locked / busy` 竞争时会退避 700ms 重试一次，仍失败则报「节点已切换，但无法更新已保存的模型选择」，切换本身不回滚。
 7. 只有 Science 进程启用该目录；普通 Claude Code 轨的 opus/sonnet/haiku 映射语义不变。
 
 两种模式的 `ScienceAuthProxy` 都直接拦截最终 `GET /api/models`，返回当前内存快照并设置 `Cache-Control: no-store`。热切换节点时先原子更新 QuotaServer 上游/目录，再替换反代快照，因此沙箱与接管都会立即显示当前节点列表，绕过 Science 后端「成功 5 分钟、失败 60 秒」缓存；响应不含 `fetch_error`，并带节点名和每百万 token 输入/输出价格说明。
@@ -128,7 +144,7 @@ Claude Science 发 `thinking.type: "auto"`，而 Anthropic 兼容上游只认 `e
 
 1. 当前 Science 选择 ID → 该目录项的精确真实 ID；其中持久默认选择槽 `claude-opus-4-8` 始终解析为当前节点默认模型；
 2. 当前节点库中的 raw ID → 精确原样直通；
-3. 旧节点残留的 `claude-aiusage-v1-*` → 当前节点默认模型；
+3. 当前节点的旧 v1 选择 → 同一真实模型；失效的 v1/v2 选择 → 当前节点默认模型；
 4. 其他 `claude-opus/sonnet/haiku` 兼容请求 → 原有 big/middle/small 三档映射。
 
 因此库里的原生 Claude 型号也不会再因为名称含 `opus/sonnet/haiku` 而被二次改写。日志和计价仍记录还原后的真实 `upstream_model`，继续命中现有模型库定价。
@@ -178,7 +194,9 @@ Swift/CryptoKit 实现的本地 OAuth 伪造器（node/rust/swift 三方字节�
 
 - 加密：AES-256-GCM（v2 格式），密钥用 HKDF-SHA256（`info="operon:aes-256-gcm:oauth"`，AAD=`"v2:oauth"`）派生。
 - 产物三件套：`.oauth-tokens/<uuid>.enc`、`encryption.key`、`active-org.json`；`token_expires_at` 设远期 → 绝不触发联网刷新。
+- 本地 provider 为 `aiusage_local`；启动时生成 `aiusage-local-fetch.mjs` 并以 Bun 原生 preload 加载，虚拟 Bearer 不能离开本地推理 origin，云目录离线不阻塞本地技能。
 - 幂等：完整自洽→复用；部分损坏→修复但保 org（旧对话不丢）；真首次→铸新 org。写入用 `O_EXCL` 临时文件 + rename + `0600`。
+- 真实云授权优先保留：过期凭证交给 Science 原生刷新；缺少活动组织指针时只恢复指针。密钥/密文不可读、组织冲突或多账号时拒绝覆盖，不猜测为虚拟账号。
 - 护栏：
   - **绝不写真实凭证目录**（护栏 0，最高优先）；沙箱与接管都用独立 data-dir。
   - email 必须以 `.invalid` 保留顶级域结尾（`refusedEmail` 否则抛错），保证不可路由假账号。

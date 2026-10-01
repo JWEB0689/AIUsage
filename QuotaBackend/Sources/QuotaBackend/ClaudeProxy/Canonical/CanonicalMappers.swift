@@ -58,7 +58,8 @@ public struct CanonicalRequestMapper {
                 topP: request.topP,
                 topK: request.topK,
                 stopSequences: request.stopSequences ?? [],
-                stream: request.stream
+                stream: request.stream,
+                reasoningEffort: request.outputConfig?.effort
             ),
             metadata: metadata
         )
@@ -78,7 +79,8 @@ public struct CanonicalRequestMapper {
                 temperature: request.temperature,
                 topP: request.topP,
                 stopSequences: request.stop ?? [],
-                stream: request.stream
+                stream: request.stream,
+                reasoningEffort: request.reasoningEffort
             ),
             metadata: [:]
         )
@@ -163,7 +165,8 @@ public struct CanonicalRequestMapper {
                 maxOutputTokens: request.maxOutputTokens,
                 temperature: request.temperature,
                 topP: request.topP,
-                stream: request.stream
+                stream: request.stream,
+                reasoningEffort: request.reasoning?.effort
             ),
             metadata: [:],
             rawExtensions: request.store.map { [CanonicalVendorExtension(vendor: "openai_responses", key: "store", value: AnyCodable($0))] } ?? []

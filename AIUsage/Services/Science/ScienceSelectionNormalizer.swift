@@ -10,6 +10,7 @@ import SQLite3
 /// - raw/native model IDs and the real `~/.claude-science` tree are never touched.
 nonisolated enum ScienceSelectionNormalizer {
     static let aliasPrefix = "claude-aiusage-v1-"
+    static let effortAliasPrefix = "claude-opus-4-8-aiusage-v2-"
     static let persistentDefaultSelectionID = "claude-opus-4-8"
 
     struct Result: Sendable, Equatable {
@@ -37,6 +38,7 @@ nonisolated enum ScienceSelectionNormalizer {
     static func normalize(
         dataDir: String,
         currentModelIDs: Set<String>,
+        replacementModelIDs: [String: String] = [:],
         managedDataDirs: Set<String>? = nil
     ) throws -> Result {
         let root = try validatedManagedRoot(dataDir, managedDataDirs: managedDataDirs)
@@ -46,13 +48,13 @@ nonisolated enum ScienceSelectionNormalizer {
 
         let databaseURLs = try databaseURLs(below: root)
         let currentAliases = currentModelIDs
-            .filter { $0.hasPrefix(aliasPrefix) }
+            .filter { $0.hasPrefix(aliasPrefix) || $0.hasPrefix(effortAliasPrefix) }
             .sorted()
         var skippedSchemaCount = 0
         var normalizedFrameCount = 0
 
         for databaseURL in databaseURLs {
-            switch try normalizeDatabase(databaseURL, currentAliases: currentAliases) {
+            switch try normalizeDatabase(databaseURL, currentAliases: currentAliases, replacements: replacementModelIDs) {
             case .unsupportedSchema:
                 skippedSchemaCount += 1
             case .normalized(let count):
@@ -146,7 +148,8 @@ nonisolated enum ScienceSelectionNormalizer {
 
     private static func normalizeDatabase(
         _ databaseURL: URL,
-        currentAliases: [String]
+        currentAliases: [String],
+        replacements: [String: String]
     ) throws -> DatabaseResult {
         var database: OpaquePointer?
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX
@@ -175,7 +178,7 @@ nonisolated enum ScienceSelectionNormalizer {
         // differ during the model UPDATE (so the trigger predicate is false),
         // then restore it. Both writes remain inside this transaction.
         try execute(
-            "CREATE TEMP TABLE aiusage_selection_targets (id TEXT PRIMARY KEY, original_root_seq) WITHOUT ROWID",
+            "CREATE TEMP TABLE aiusage_selection_targets (id TEXT PRIMARY KEY, original_root_seq, original_model TEXT, replacement_model TEXT) WITHOUT ROWID",
             database: database,
             path: databaseURL.path
         )
@@ -183,16 +186,18 @@ nonisolated enum ScienceSelectionNormalizer {
         let exclusions = currentAliases.isEmpty
             ? ""
             : " AND model NOT IN (\(Array(repeating: "?", count: currentAliases.count).joined(separator: ",")))"
-        let targetSQL = "INSERT INTO temp.aiusage_selection_targets (id, original_root_seq) SELECT id, root_seq FROM frames WHERE model GLOB ?\(exclusions)"
+        let targetSQL = "INSERT INTO temp.aiusage_selection_targets (id, original_root_seq, original_model, replacement_model) SELECT id, root_seq, model, ? FROM frames WHERE (model GLOB ? OR model GLOB ?)\(exclusions)"
         var targetStatement: OpaquePointer?
         guard sqlite3_prepare_v2(database, targetSQL, -1, &targetStatement, nil) == SQLITE_OK,
               let targetStatement else {
             throw databaseError(database, path: databaseURL.path)
         }
         let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-        try bind(aliasPrefix + "*", at: 1, statement: targetStatement, database: database, path: databaseURL.path, transient: transient)
+        try bind(persistentDefaultSelectionID, at: 1, statement: targetStatement, database: database, path: databaseURL.path, transient: transient)
+        try bind(aliasPrefix + "*", at: 2, statement: targetStatement, database: database, path: databaseURL.path, transient: transient)
+        try bind(effortAliasPrefix + "*", at: 3, statement: targetStatement, database: database, path: databaseURL.path, transient: transient)
         for (offset, alias) in currentAliases.enumerated() {
-            try bind(alias, at: Int32(offset + 2), statement: targetStatement, database: database, path: databaseURL.path, transient: transient)
+            try bind(alias, at: Int32(offset + 4), statement: targetStatement, database: database, path: databaseURL.path, transient: transient)
         }
         guard sqlite3_step(targetStatement) == SQLITE_DONE else {
             sqlite3_finalize(targetStatement)
@@ -202,10 +207,24 @@ nonisolated enum ScienceSelectionNormalizer {
         let changed = Int(sqlite3_changes(database))
 
         if changed > 0 {
+            // 只查询已命中的临时记录，避免每个模型再次扫描整个会话库。
+            try execute("CREATE INDEX temp.aiusage_selection_model ON aiusage_selection_targets(original_model)", database: database, path: databaseURL.path)
+            var replacementStatement: OpaquePointer?
+            guard sqlite3_prepare_v2(database, "UPDATE temp.aiusage_selection_targets SET replacement_model = ? WHERE original_model = ?", -1, &replacementStatement, nil) == SQLITE_OK,
+                  let replacementStatement else { throw databaseError(database, path: databaseURL.path) }
+            defer { sqlite3_finalize(replacementStatement) }
+            let allowedReplacements = Set(currentAliases).union([persistentDefaultSelectionID])
+            for (old, replacement) in replacements where allowedReplacements.contains(replacement) {
+                sqlite3_reset(replacementStatement)
+                sqlite3_clear_bindings(replacementStatement)
+                try bind(replacement, at: 1, statement: replacementStatement, database: database, path: databaseURL.path, transient: transient)
+                try bind(old, at: 2, statement: replacementStatement, database: database, path: databaseURL.path, transient: transient)
+                guard sqlite3_step(replacementStatement) == SQLITE_DONE else { throw databaseError(database, path: databaseURL.path) }
+            }
             var updateStatement: OpaquePointer?
             let updateSQL = """
                 UPDATE frames
-                SET model = ?,
+                SET model = (SELECT replacement_model FROM temp.aiusage_selection_targets WHERE id = frames.id),
                     root_seq = CASE
                         WHEN root_frame_id IS NULL THEN root_seq
                         WHEN root_seq = 0 THEN -1
@@ -217,7 +236,6 @@ nonisolated enum ScienceSelectionNormalizer {
                   let updateStatement else {
                 throw databaseError(database, path: databaseURL.path)
             }
-            try bind(persistentDefaultSelectionID, at: 1, statement: updateStatement, database: database, path: databaseURL.path, transient: transient)
             guard sqlite3_step(updateStatement) == SQLITE_DONE else {
                 sqlite3_finalize(updateStatement)
                 throw databaseError(database, path: databaseURL.path)
@@ -244,10 +262,9 @@ nonisolated enum ScienceSelectionNormalizer {
                 SELECT COUNT(*)
                 FROM frames
                 JOIN temp.aiusage_selection_targets AS targets ON targets.id = frames.id
-                WHERE frames.model IS NOT ?
+                WHERE frames.model IS NOT targets.replacement_model
                    OR frames.root_seq IS NOT targets.original_root_seq
                 """,
-                binding: persistentDefaultSelectionID,
                 database: database,
                 path: databaseURL.path
             )
@@ -377,7 +394,7 @@ nonisolated enum ScienceSelectionNormalizer {
 
     private static func scalarInt(
         _ sql: String,
-        binding: String,
+        binding: String? = nil,
         database: OpaquePointer,
         path: String
     ) throws -> Int {
@@ -388,7 +405,9 @@ nonisolated enum ScienceSelectionNormalizer {
         }
         defer { sqlite3_finalize(statement) }
         let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-        try bind(binding, at: 1, statement: statement, database: database, path: path, transient: transient)
+        if let binding {
+            try bind(binding, at: 1, statement: statement, database: database, path: path, transient: transient)
+        }
         guard sqlite3_step(statement) == SQLITE_ROW else {
             throw databaseError(database, path: path)
         }

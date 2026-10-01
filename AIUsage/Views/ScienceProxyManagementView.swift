@@ -71,6 +71,14 @@ struct ScienceProxyManagementView: View {
                 }
                 modelCatalogCard
                 configCard
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(L("Skills and connectors", "技能与连接器")).font(.headline)
+                    Text(L("Manage local skills and custom MCP connectors in Science Settings. No Claude account is required; inference uses your selected AIUsage node. Each workspace keeps its own skills, connectors and conversations.", "在 Science 设置中管理本地技能和自定义 MCP，无需 Claude 账号；推理使用所选 AIUsage 节点。技能、连接器和对话按工作区独立保存。"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 16).fill(AppSurface.card(colorScheme)))
             }
             .frame(maxWidth: 960)
             .padding(20)

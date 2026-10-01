@@ -66,7 +66,7 @@ final class ScienceProxyManager: ObservableObject {
         let plan = endpointPlan
         return [ProxyPortArbiter.Owner(
             id: "__aiusage_science_surface__",
-            ports: [plan.publicPort, plan.daemonPort],
+            ports: [plan.publicPort, plan.daemonPort, plan.previewPort, plan.nativePreviewPort],
             track: AppSettings.shared.t("Claude Science", "Claude Science"),
             label: node(for: config.activeNodeId)?.name ?? ""
         )]
@@ -80,6 +80,8 @@ final class ScienceProxyManager: ObservableObject {
                 mode: .adopt,
                 publicPort: GlobalProxyConfig.realInstancePort,
                 daemonPort: GlobalProxyConfig.realInstanceInternalPort,
+                previewPort: GlobalProxyConfig.adoptedSciencePreviewPort,
+                nativePreviewPort: GlobalProxyConfig.adoptedNativeSciencePreviewPort,
                 dataDir: ScienceRealAdopt.adoptDataDir
             )
         }
@@ -88,6 +90,8 @@ final class ScienceProxyManager: ObservableObject {
             mode: .sandbox,
             publicPort: config.effectiveSciencePort,
             daemonPort: GlobalProxyConfig.defaultScienceSandboxInternalPort,
+            previewPort: GlobalProxyConfig.defaultSciencePreviewPort,
+            nativePreviewPort: GlobalProxyConfig.nativeSciencePreviewPort,
             dataDir: paths.dataDir
         )
     }
@@ -207,26 +211,31 @@ final class ScienceProxyManager: ObservableObject {
         dataDir: String
     ) async throws -> ScienceSelectionNormalizer.Result {
         let modelIDs = Set(catalog.models.map(\.id))
+        let replacements = Dictionary(uniqueKeysWithValues: catalog.models.map {
+            (ScienceModelProtocolAdapter.generatedSelectionID(for: $0.upstreamModel), $0.id)
+        })
         do {
-            return try await Self.runNormalization(dataDir: dataDir, modelIDs: modelIDs)
+            return try await Self.runNormalization(dataDir: dataDir, modelIDs: modelIDs, replacements: replacements)
         } catch let error as ScienceSelectionNormalizer.NormalizationError
             where Self.isTransientDatabaseContention(error) {
             // Hot-switch normalizes while the daemon still holds the database.
             // One short backoff absorbs a daemon write transaction that
             // outlives the normalizer's SQLite busy timeout.
             try? await Task.sleep(nanoseconds: 700_000_000)
-            return try await Self.runNormalization(dataDir: dataDir, modelIDs: modelIDs)
+            return try await Self.runNormalization(dataDir: dataDir, modelIDs: modelIDs, replacements: replacements)
         }
     }
 
     private static func runNormalization(
         dataDir: String,
-        modelIDs: Set<String>
+        modelIDs: Set<String>,
+        replacements: [String: String]
     ) async throws -> ScienceSelectionNormalizer.Result {
         try await Task.detached(priority: .utility) {
             try ScienceSelectionNormalizer.normalize(
                 dataDir: dataDir,
-                currentModelIDs: modelIDs
+                currentModelIDs: modelIDs,
+                replacementModelIDs: replacements
             )
         }.value
     }
@@ -244,12 +253,16 @@ final class ScienceProxyManager: ObservableObject {
             GlobalProxyConfig.realInstancePort,
             GlobalProxyConfig.realInstanceInternalPort,
             GlobalProxyConfig.defaultScienceSandboxInternalPort,
+            GlobalProxyConfig.defaultSciencePreviewPort,
+            GlobalProxyConfig.adoptedSciencePreviewPort,
+            GlobalProxyConfig.nativeSciencePreviewPort,
+            GlobalProxyConfig.adoptedNativeSciencePreviewPort,
         ])
         switch plan.validationIssue(proxyPort: config.port, reservedPorts: reservedInternalPorts) {
         case .duplicatePort:
             return AppSettings.shared.t(
-                "Port conflict: the inference proxy (\(config.port)), Science entry (\(plan.publicPort)), and internal daemon (\(plan.daemonPort)) must use different ports.",
-                "端口冲突：推理代理（\(config.port)）、Science 入口（\(plan.publicPort)）和内部 daemon（\(plan.daemonPort)）必须使用不同端口。"
+                "Port conflict: inference (\(config.port)), Science entry (\(plan.publicPort)), daemon (\(plan.daemonPort)), and previews (\(plan.previewPort), \(plan.nativePreviewPort)) must use different ports.",
+                "端口冲突：推理代理（\(config.port)）、Science 入口（\(plan.publicPort)）、内部 daemon（\(plan.daemonPort)）与预览（\(plan.previewPort)、\(plan.nativePreviewPort)）必须使用不同端口。"
             )
         case .reservedPort:
             let reserved = reservedInternalPorts.sorted().map(String.init).joined(separator: ", ")
@@ -259,7 +272,7 @@ final class ScienceProxyManager: ObservableObject {
             )
         case nil:
             if let conflict = ProxyPortArbiter.conflict(
-                forPorts: [plan.publicPort, plan.daemonPort],
+                forPorts: [plan.publicPort, plan.daemonPort, plan.previewPort, plan.nativePreviewPort],
                 excluding: "__aiusage_science_surface__"
             ) {
                 let owner = conflict.label.isEmpty ? conflict.track : "\(conflict.track) · \(conflict.label)"
@@ -469,7 +482,7 @@ final class ScienceProxyManager: ObservableObject {
                     // 解耦版：清场（退桌面 app + 腾端口 + 删残留劫持锁）→ 独立 data-dir 起虚拟登录 daemon（内部端口）。
                     // 绝不碰真实 ~/.claude-science 凭证；仅劫持它的 operon.lock（运行期文件，停用即删）。
                     ScienceRealAdopt.prepareForAdopt()
-                    try ScienceRealAdopt.startInternalDaemon(proxyPort: proxyPort, email: email)
+                    try ScienceRealAdopt.startInternalDaemon(proxyPort: proxyPort, email: email, previewPort: endpoints.previewPort, nativePreviewPort: endpoints.nativePreviewPort)
                 }.value
             } else {
                 let paths = ScienceSandboxPaths.make(workspaceId: config.effectiveActiveScienceWorkspaceId)
@@ -481,7 +494,9 @@ final class ScienceProxyManager: ObservableObject {
                     try ScienceSandbox.launch(
                         paths: paths,
                         sciencePort: endpoints.daemonPort,
-                        proxyPort: proxyPort
+                        proxyPort: proxyPort,
+                        previewPort: endpoints.previewPort,
+                        nativePreviewPort: endpoints.nativePreviewPort
                     )
                 }.value
             }
@@ -510,6 +525,8 @@ final class ScienceProxyManager: ObservableObject {
             try await ScienceAuthProxy.shared.start(
                 listenPort: endpoints.publicPort,
                 upstreamPort: endpoints.daemonPort,
+                previewPort: endpoints.previewPort,
+                nativePreviewPort: endpoints.nativePreviewPort,
                 dataDir: endpoints.dataDir,
                 modelCatalog: catalog
             )
@@ -580,7 +597,7 @@ final class ScienceProxyManager: ObservableObject {
         let otherModeDataDir = endpoints.adopting
             ? sandboxPaths.dataDir
             : ScienceManagedDaemonStopper.managedAdoptDataDir
-        await Task.detached(priority: .utility) {
+        _ = await Task.detached(priority: .utility) {
             ScienceManagedDaemonStopper.stopFromManagedLock(dataDir: otherModeDataDir)
         }.value
         runtime.stop()

@@ -13,7 +13,7 @@ import os.log
 //   - 首次只 APFS 克隆运行时资产（bin/conda/runtime/seed-assets），绝不复制任何真实登录凭证。
 //   - encryption.key 的钥匙串镜像账号按【路径哈希】派生，沙箱与真实天然隔离；沙箱用独立空密码钥匙串。
 
-private let sandboxLog = Logger(subsystem: "com.aiusage.desktop", category: "ScienceSandbox")
+nonisolated private let sandboxLog = Logger(subsystem: "com.aiusage.desktop", category: "ScienceSandbox")
 
 enum ScienceSandboxError: LocalizedError {
     case scienceNotInstalled
@@ -45,7 +45,7 @@ enum ScienceSandboxError: LocalizedError {
 }
 
 /// 沙箱各路径（由工作区 id 与固定布局推导）。
-struct ScienceSandboxPaths {
+nonisolated struct ScienceSandboxPaths: Sendable {
     /// 沙箱 HOME（独立于真实 HOME）。
     let home: String
     /// 沙箱 data-dir（= 沙箱 HOME/.claude-science；虚拟登录写这里）。
@@ -121,7 +121,7 @@ struct ScienceSandboxPaths {
     }
 }
 
-enum ScienceSandbox {
+nonisolated enum ScienceSandbox {
     /// 运行时资产（APFS 克隆，不含任何登录凭证）。
     private static let runtimeAssets = ["bin", "conda", "runtime", "seed-assets"]
     private static let clonedMarkerAsset = "bin"
@@ -155,7 +155,7 @@ enum ScienceSandbox {
     }
 
     /// 启动沙箱 Science（后台守护）。推理经 ANTHROPIC_BASE_URL 导去本地代理。
-    static func launch(paths: ScienceSandboxPaths, sciencePort: Int, proxyPort: Int) throws {
+    static func launch(paths: ScienceSandboxPaths, sciencePort: Int, proxyPort: Int, previewPort: Int, nativePreviewPort: Int) throws {
         guard isInstalled else { throw ScienceSandboxError.scienceNotInstalled }
         guard sciencePort != 8765 else { throw ScienceSandboxError.refusedRealPort }
         try guardDataDir(paths)
@@ -163,6 +163,13 @@ enum ScienceSandbox {
         var env = ProcessInfo.processInfo.environment
         env["HOME"] = paths.home
         env["ANTHROPIC_BASE_URL"] = "http://127.0.0.1:\(proxyPort)"
+        env.removeValue(forKey: "ANTHROPIC_API_KEY")
+        env.removeValue(forKey: "ANTHROPIC_AUTH_TOKEN")
+        env["OPERON_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
+        let preload = try ScienceVirtualLogin.localFetchPreload(authDir: paths.dataDir, sandboxRoot: paths.home)
+        let quotedPreload = preload.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        env["BUN_OPTIONS"] = "--preload \"\(quotedPreload)\""
+        env["OPERON_SANDBOX_ORIGIN"] = "http://localhost:\(previewPort)"
         // 本地推理直连回环，不经用户系统代理（operon 认小写 no_proxy）。
         env["no_proxy"] = "127.0.0.1,localhost,::1"
         env["NO_PROXY"] = "127.0.0.1,localhost,::1"
@@ -173,6 +180,7 @@ enum ScienceSandbox {
             "serve",
             "--data-dir", paths.dataDir,
             "--port", "\(sciencePort)",
+            "--sandbox-port", "\(nativePreviewPort)",
             "--no-browser",
             "--no-auto-update",
             "--detached",

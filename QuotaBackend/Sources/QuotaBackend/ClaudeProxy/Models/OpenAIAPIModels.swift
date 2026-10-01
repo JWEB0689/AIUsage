@@ -3,6 +3,7 @@ import Foundation
 // MARK: - OpenAI API Request Models
 
 public struct OpenAIChatCompletionRequest: Codable, Sendable {
+    public let reasoningEffort: String?
     public let model: String
     public let messages: [OpenAIChatMessage]
     public let temperature: Double?
@@ -32,6 +33,7 @@ public struct OpenAIChatCompletionRequest: Codable, Sendable {
         case toolChoice = "tool_choice"
         case parallelToolCalls = "parallel_tool_calls"
         case promptCacheKey = "prompt_cache_key"
+        case reasoningEffort = "reasoning_effort"
     }
 
     public init(
@@ -46,7 +48,8 @@ public struct OpenAIChatCompletionRequest: Codable, Sendable {
         tools: [OpenAITool]? = nil,
         toolChoice: OpenAIToolChoice? = nil,
         parallelToolCalls: Bool? = nil,
-        promptCacheKey: String? = nil
+        promptCacheKey: String? = nil,
+        reasoningEffort: String? = nil
     ) {
         self.model = model
         self.messages = messages
@@ -60,6 +63,7 @@ public struct OpenAIChatCompletionRequest: Codable, Sendable {
         self.toolChoice = toolChoice
         self.parallelToolCalls = parallelToolCalls
         self.promptCacheKey = promptCacheKey
+        self.reasoningEffort = reasoningEffort
     }
 }
 

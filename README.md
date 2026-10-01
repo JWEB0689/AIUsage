@@ -241,7 +241,7 @@ Switch OpenCode between any number of upstreams without hand-editing `opencode.j
 
 ### Claude Science Proxy
 
-Launch a local [Claude Science](https://claude.com) instance without a Claude subscription, and route its inference to a third-party model of your choice through the local proxy — while keeping tool calls, Skills, MCP and code execution intact. For personal study and research only; use at your own risk.
+Launch a local [Claude Science](https://claude.com) instance without a Claude account or subscription and route inference to your chosen third-party model. Create, import, edit and use local skills and custom MCP connectors without cloud registry access. For personal study and research only; use at your own risk.
 
 | Capability | What it does |
 |------------|-------------|
@@ -249,6 +249,8 @@ Launch a local [Claude Science](https://claude.com) instance without a Claude su
 | **Inference via third-party** | Points `ANTHROPIC_BASE_URL` at the reused local `QuotaServer`, strips inbound OAuth, injects your third-party key, and maps opus/sonnet/haiku tiers to the node's real models |
 | **Isolated sandbox** | Separate HOME / port (14410) / data-dir / keychain, zero impact on the real instance; one click opens the logged-in page in your browser |
 | **Adopt the real instance (optional)** | An 8765 reverse proxy plus a decoupled internal daemon (14411) makes the **double-clicked desktop app login-free too**; session bootstrap tolerates current daemon response/cookie formats and reports redacted diagnostics if upstream auth changes |
+| **Skills and MCP** | Local skill creation/import/editing and custom MCP without Claude login; bundled skills remain available, with separate-origin previews and chunked forwarding for large MCP App resources |
+| **Reasoning effort** | Preserves the selected effort for default and non-default models across Anthropic, OpenAI Chat Completions and Responses request paths |
 | **Shared node pool** | Reuses the Claude-family nodes from the Claude Code proxy; hot-swap the upstream at runtime, transparent to Science |
 
 **Quick start:** Prepare an upstream node on the Claude Code proxy page first → Open AIUsage → Claude Science Proxy → pick a node → One-click start; your browser opens the logged-in Science automatically. See [docs/CLAUDE_SCIENCE_INTEGRATION.md](docs/CLAUDE_SCIENCE_INTEGRATION.md) for the technical design.

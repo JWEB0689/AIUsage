@@ -3,6 +3,11 @@ import Foundation
 // MARK: - Responses API Request Models
 
 public struct OpenAIResponsesRequest: Codable, Sendable {
+    public struct Reasoning: Codable, Sendable {
+        public let effort: String
+        public init(effort: String) { self.effort = effort }
+    }
+    public let reasoning: Reasoning?
     public let model: String
     public let input: [OpenAIResponsesInputItem]
     public let temperature: Double?
@@ -15,7 +20,7 @@ public struct OpenAIResponsesRequest: Codable, Sendable {
     public let parallelToolCalls: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case model, input, temperature, stream, store, tools
+        case model, input, temperature, stream, store, tools, reasoning
         case topP = "top_p"
         case maxOutputTokens = "max_output_tokens"
         case toolChoice = "tool_choice"
@@ -32,7 +37,8 @@ public struct OpenAIResponsesRequest: Codable, Sendable {
         store: Bool? = false,
         tools: [OpenAIResponsesTool]? = nil,
         toolChoice: OpenAIResponsesToolChoice? = nil,
-        parallelToolCalls: Bool? = nil
+        parallelToolCalls: Bool? = nil,
+        reasoning: Reasoning? = nil
     ) {
         self.model = model
         self.input = input
@@ -44,6 +50,7 @@ public struct OpenAIResponsesRequest: Codable, Sendable {
         self.tools = tools
         self.toolChoice = toolChoice
         self.parallelToolCalls = parallelToolCalls
+        self.reasoning = reasoning
     }
 }
 

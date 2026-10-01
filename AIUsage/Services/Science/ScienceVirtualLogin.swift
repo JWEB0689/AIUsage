@@ -18,7 +18,7 @@ import os.log
 // 铁律护栏：**绝不写真实凭证目录**（唯一致命的就是误写真实 `~/.claude-science`）；
 // 另加假账号（email 必须以 `.invalid` 保留顶级域结尾）、写前拒符号链接、O_EXCL 临时文件 + rename + 0600。
 
-private let forgeLog = Logger(subsystem: "com.aiusage.desktop", category: "ScienceVirtualLogin")
+nonisolated private let forgeLog = Logger(subsystem: "com.aiusage.desktop", category: "ScienceVirtualLogin")
 
 enum ScienceLoginAction: Equatable {
     case reused    // 现有登录完整自洽，原样复用，未写任何文件
@@ -42,6 +42,7 @@ enum ScienceLoginError: LocalizedError {
     case cryptoFailed(String)
     case io(String)
     case ambiguousMultiOrg(String)
+    case preservedAuthorization(String)
 
     var errorDescription: String? {
         switch self {
@@ -71,6 +72,8 @@ enum ScienceLoginError: LocalizedError {
                 "Multiple historical organizations found but the active one can't be determined; aborted to avoid orphaning old conversations. Data is under \(dir)/orgs/.",
                 "检测到多个历史组织但无法确定活动组织，为避免旧对话被孤儿化已中止。数据在 \(dir)/orgs/。"
             )
+        case .preservedAuthorization(let reason):
+            return AppSettings.shared.t("Stored Claude authorization was preserved; virtual login will not overwrite it: \(reason)", "已保留 Claude 授权，虚拟登录不会覆盖现有凭证：\(reason)")
         }
     }
 }
@@ -78,7 +81,39 @@ enum ScienceLoginError: LocalizedError {
 // MARK: - Forge
 
 /// 纯逻辑的虚拟登录伪造器；无 UI / 无全局状态依赖，便于复用与推理。
-enum ScienceVirtualLogin {
+nonisolated enum ScienceVirtualLogin {
+    // 本地身份不冒充 claude.ai；虚拟 Bearer 仅用于回环推理，云请求由启动守卫截断。
+    static let localProvider = "aiusage_local"
+    static let localBearer = "sk-ant-virtual-aiusage-local"
+
+    /// Bun 原生 preload：只截断本项目虚拟 Bearer 的非本地请求，不改 Science 二进制、
+    /// 不拦截 MCP 自己的凭证。原生 caFetch 将 401 视为未登录，而非目录网络故障。
+    static func localFetchPreload(authDir: String, sandboxRoot: String) throws -> String {
+        let resolved = try resolveGuarded(authDir: authDir, email: "aiusage@local.invalid", sandboxRoot: sandboxRoot,
+                                          realCredDir: (NSHomeDirectory() as NSString).appendingPathComponent(".claude-science"))
+        let source = """
+        const local = new URL(process.env.ANTHROPIC_BASE_URL);
+        if (local.protocol !== 'http:' || !['127.0.0.1', '[::1]'].includes(local.hostname)) {
+          throw new Error('AIUsage local inference requires a literal loopback URL');
+        }
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = function(input, options) {
+          const headers = new Headers(options?.headers ?? (input instanceof Request ? input.headers : undefined));
+          if (headers.get('authorization') === 'Bearer \(localBearer)') {
+            const target = new URL(input instanceof Request ? input.url : input);
+            if (target.origin !== local.origin) {
+              return Promise.resolve(new Response('{"error":"aiusage_local_only"}', {
+                status: 401, headers: {'Content-Type': 'application/json'}
+              }));
+            }
+          }
+          return originalFetch.call(globalThis, input, options);
+        };
+        """
+        let path = (resolved as NSString).appendingPathComponent("aiusage-local-fetch.mjs")
+        try safeWrite(path, Data(source.utf8), mode: 0o600)
+        return path
+    }
     private static let keyNames = [
         "ANTHROPIC_API_KEY_ENCRYPTION_KEY",
         "OAUTH_ENCRYPTION_KEY",
@@ -96,6 +131,16 @@ enum ScienceVirtualLogin {
     static func ensure(authDir: String, email: String, sandboxRoot: String) throws -> ScienceForgeResult {
         let realCredDir = (NSHomeDirectory() as NSString).appendingPathComponent(".claude-science")
         let resolved = try resolveGuarded(authDir: authDir, email: email, sandboxRoot: sandboxRoot, realCredDir: realCredDir)
+
+        // 保留已有真实凭证，不把它们误判为待迁移的本地身份。
+        if let authorized = try readAuthorizedLogin(resolved) {
+            if readActiveOrg(resolved) == nil {
+                // 组织指针损坏时从已授权 token 恢复，不改 token、密钥或历史。
+                let data = try JSONSerialization.data(withJSONObject: ["org_uuid": authorized.org, "account_uuid": authorized.account])
+                try safeWrite((resolved as NSString).appendingPathComponent("active-org.json"), data, mode: 0o600)
+            }
+            return ScienceForgeResult(authDir: resolved, accountUUID: authorized.account, orgUUID: authorized.org, encFile: authorized.enc, action: .reused)
+        }
 
         // 完整自洽 → 原样复用，不碰任何文件（Science 可能正在读）。
         if let intact = readIntactLogin(resolved: resolved, email: email) {
@@ -215,14 +260,13 @@ enum ScienceVirtualLogin {
         // —— 令牌 blob（字段对齐 Science 的 _tryOauthToken）——
         let accountUUID = preferAccount ?? uuidV4()
         let orgUUID = preferOrg ?? uuidV4()
-        let access = "sk-ant-virtual-" + (try randomBytes(24).map { String(format: "%02x", $0) }.joined())
         let blob: [String: Any] = [
-            "access_token": access,     // 代理会剥离，值任意
+            "access_token": localBearer, // 原生推理仍要求 Bearer；启动守卫禁止它离开本地
             "refresh_token": "",
             "api_key": NSNull(),
             "token_expires_at": "2099-01-01T00:00:00.000Z", // 远期 → 绝不联网刷新
-            "provider": "claude_ai",
-            "scopes": "user:inference user:file_upload user:profile user:mcp_servers user:plugins",
+            "provider": localProvider,
+            "scopes": "",
             "email": email,
             "account_uuid": accountUUID,
             "subscription_type": "max",
@@ -298,8 +342,8 @@ enum ScienceVirtualLogin {
         let blobOrg = blob["org_uuid"] as? String
         let blobEmail = blob["email"] as? String
         let account = blob["account_uuid"] as? String
-        let providerOK = (blob["provider"] as? String) == "claude_ai"
-        let accessOK = (blob["access_token"] as? String).map { !$0.isEmpty } ?? false
+        let providerOK = (blob["provider"] as? String) == localProvider
+        let accessOK = (blob["access_token"] as? String) == localBearer
         let expiryOK = (blob["token_expires_at"] as? String).map(tokenNotExpired) ?? false
         guard blobOrg == activeOrg,
               blobEmail == email,
@@ -320,6 +364,50 @@ enum ScienceVirtualLogin {
             }
         }
         return nil
+    }
+
+    static func hasAuthorizedLogin(authDir: String) -> Bool {
+        (try? readAuthorizedLogin(authDir)) != nil
+    }
+
+    private static func readAuthorizedLogin(_ resolved: String) throws -> IntactLogin? {
+        let tokenDir = (resolved as NSString).appendingPathComponent(".oauth-tokens")
+        try assertNotSymlink(tokenDir)
+        guard FileManager.default.fileExists(atPath: tokenDir) else { return nil }
+        let entries = try FileManager.default.contentsOfDirectory(atPath: tokenDir).filter { $0.hasSuffix(".enc") }
+        guard !entries.isEmpty else { return nil }
+        try assertNotSymlink((resolved as NSString).appendingPathComponent("encryption.key"))
+        try assertNotSymlink((resolved as NSString).appendingPathComponent("active-org.json"))
+        guard let key = parseOAuthKey(resolved) else { throw ScienceLoginError.preservedAuthorization("encryption.key is unavailable") }
+        let activeOrg = readActiveOrg(resolved)
+        var authorized: IntactLogin?
+        for entry in entries {
+            let enc = (resolved as NSString).appendingPathComponent(".oauth-tokens/" + entry)
+            try assertNotSymlink(enc)
+            guard let body = try? String(contentsOfFile: enc, encoding: .utf8),
+                  let data = try? decryptTokenV2(body, oauthKeyB64: key),
+                  let blob = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw ScienceLoginError.preservedAuthorization("stored token cannot be decoded")
+            }
+            if let email = blob["email"] as? String, email.hasSuffix(".invalid"),
+               let token = blob["access_token"] as? String,
+               (token.hasPrefix("sk-ant-virtual-") || (blob["provider"] as? String == localProvider && token.isEmpty)) { continue }
+            guard let email = blob["email"] as? String, !email.isEmpty,
+                  let account = blob["account_uuid"] as? String, looksLikeUUID(account),
+                  let org = blob["org_uuid"] as? String, looksLikeUUID(org),
+                  blob["provider"] as? String == "claude_ai",
+                  let token = blob["access_token"] as? String, !token.isEmpty else {
+                throw ScienceLoginError.preservedAuthorization("stored token is not an AIUsage virtual login")
+            }
+            guard activeOrg == nil || activeOrg == org, authorized == nil else {
+                throw ScienceLoginError.preservedAuthorization("account/organization selection is inconsistent")
+            }
+            authorized = IntactLogin(account: account, org: org, enc: enc)
+        }
+        if authorized != nil, entries.count != 1 {
+            throw ScienceLoginError.preservedAuthorization("multiple stored accounts require explicit selection")
+        }
+        return authorized
     }
 
     /// `.oauth-tokens/` 下恰好一个 `.enc` 才返回其路径；零个或多于一个都返回 nil。
@@ -482,7 +570,7 @@ enum ScienceVirtualLogin {
             case 8, 13, 18, 23:
                 if c != UInt8(ascii: "-") { return false }
             default:
-                if !isxdigit(Int32(c)).boolValue { return false }
+                if isxdigit(Int32(c)) == 0 { return false }
             }
         }
         return true
@@ -510,8 +598,4 @@ enum ScienceVirtualLogin {
         let c = cal.dateComponents([.year, .month, .day], from: Date())
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
-}
-
-private extension Int32 {
-    var boolValue: Bool { self != 0 }
 }
