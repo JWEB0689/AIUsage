@@ -276,13 +276,14 @@ final class ProviderRefreshCoordinator: ObservableObject {
         return result
     }
 
+    @discardableResult
     func registerAuthenticatedCredential(
         _ credential: AccountCredential,
         usage: ProviderUsage,
         note: String?,
         providerDisplayTitle: String
-    ) throws {
-        try accountStore.registerAuthenticatedCredential(
+    ) throws -> String {
+        return try accountStore.registerAuthenticatedCredential(
             credential,
             usage: usage,
             note: note,

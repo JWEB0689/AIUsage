@@ -890,7 +890,8 @@ final class CodexConfigManager {
     /// 从当前 Codex 自带目录复制一份完整模型元数据，只改成统一入口名。
     /// 这样模型选择器只显示 LLM，同时思考程度、工具能力与系统指令继续由 Codex 自己定义。
     private func makeUnifiedModelCatalog(model: String) throws -> Data {
-        guard let codexExecutable = aiusageResolvedExecutable(named: "codex") else {
+        // 与登录流程共用同一套查找：用户自己的 codex 优先，否则回退到 ChatGPT.app / IDE 扩展自带的 codex。
+        guard let codexExecutable = aiusageCodexExecutable() else {
             throw CodexConfigError.codexExecutableNotFound
         }
 

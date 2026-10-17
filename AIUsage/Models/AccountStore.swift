@@ -150,6 +150,8 @@ final class AccountStore: ObservableObject {
         return persistAccountRegistry()
     }
 
+    /// 返回该账号在仪表盘中的 provider result id（`<providerId>:cred:<credentialId>`）。
+    @discardableResult
     func registerAuthenticatedCredential(
         _ credential: AccountCredential,
         usage: ProviderUsage,
@@ -157,7 +159,7 @@ final class AccountStore: ObservableObject {
         providerDisplayTitle: String,
         insertImmediateProviderData: (_ providerId: String, _ credentialId: String, _ accountLabel: String?, _ usage: ProviderUsage) -> Void,
         ensureProviderSelected: (String) -> Void
-    ) throws {
+    ) throws -> String {
         let providerId = credential.providerId
         let accountHandle: String = {
             if let v = usage.accountEmail?.nilIfBlank { return v }
@@ -294,6 +296,7 @@ final class AccountStore: ObservableObject {
             enrichedCredential.accountLabel ?? accountHandle,
             usage
         )
+        return "\(providerId):cred:\(enrichedCredential.id)"
     }
 
     func updateAccountNote(

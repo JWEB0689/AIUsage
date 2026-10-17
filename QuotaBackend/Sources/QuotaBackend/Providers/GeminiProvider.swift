@@ -415,12 +415,31 @@ public struct GeminiProvider: ProviderFetcher, CredentialAcceptingProvider {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         if let http = response as? HTTPURLResponse, (http.statusCode == 401 || http.statusCode == 403) {
+            // 不是令牌问题：重新登录也无效，所以不能再提示用户重新认证，也不触发刷新重试。
+            if http.statusCode == 403, Self.isIndividualTierDiscontinued(responseBody: data) {
+                throw ProviderError("gemini_individual_discontinued", Self.individualTierDiscontinuedMessage)
+            }
             throw ProviderError("not_logged_in", "Gemini OAuth token is invalid or expired. Re-authenticate with `gemini`.")
         }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw ProviderError("parse_failed", "Gemini quota API returned invalid JSON.")
         }
         return json
+    }
+
+    // MARK: - Individual Tier Shutdown
+    // Google 自 2026-06-18 起停止为个人账号（免费 / Google AI Pro / Ultra）提供 Gemini CLI 与 Code Assist，
+    // 后端对这些账号返回 403 UNSUPPORTED_CLIENT："This client is no longer supported for Gemini Code
+    // Assist for individuals…"。只有 Code Assist Standard / Enterprise 许可仍可使用。
+    // https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals
+
+    static let individualTierDiscontinuedMessage =
+        "Google stopped serving Gemini CLI for personal Google accounts (free, Google AI Pro and Ultra) on June 18, 2026. Only Gemini Code Assist Standard or Enterprise licenses still work — track personal accounts with Antigravity instead."
+
+    static func isIndividualTierDiscontinued(responseBody data: Data) -> Bool {
+        let body = String(decoding: data, as: UTF8.self).lowercased()
+        return body.contains("unsupported_client")
+            || body.contains("no longer supported for gemini code assist for individuals")
     }
 
     // MARK: - Response Parsing

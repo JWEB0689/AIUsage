@@ -14,6 +14,8 @@ final class KiroLoginCoordinator: ObservableObject {
     @Published private(set) var phase: LoginPhase = .idle
     @Published private(set) var userCode: String?
     @Published private(set) var verificationURL: URL?
+    /// AWS 授权页通过 verificationUriComplete 预填了验证码，用户只需核对后确认。
+    @Published private(set) var codeIsPrefilled = false
     // 仅内部记录人类可读进度，UI 不直接展示；保持普通存储属性避免无谓的视图重渲染。
     private var outputSummary: String?
     @Published private(set) var importedAuthFileURL: URL?
@@ -56,6 +58,7 @@ final class KiroLoginCoordinator: ObservableObject {
         phase = .launching
         userCode = nil
         verificationURL = nil
+        codeIsPrefilled = false
         outputSummary = nil
         importedAuthFileURL = nil
         accountEmail = nil
@@ -125,6 +128,7 @@ final class KiroLoginCoordinator: ObservableObject {
 
         if let fullURI = authorization.verificationUriComplete, let url = URL(string: fullURI) {
             verificationURL = url
+            codeIsPrefilled = true
         } else if let url = URL(string: authorization.verificationUri) {
             verificationURL = url
         }

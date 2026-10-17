@@ -78,6 +78,12 @@ struct SettingsView: View {
     @State var lowQuotaThreshold: Double = UserDefaults.standard.double(forKey: DefaultsKey.lowQuotaThreshold)
     @State var remoteHostInput: String = ""
     @State var remotePortInput: String = ""
+    @State var remoteTokenInput: String = ""
+    @State var sharePortInput: String = ""
+    @State var isShareTokenRevealed = false
+    @State var shareAddresses: [QuotaShareService.ShareAddress] = []
+    @State var recentlyCopiedShareValue: String?
+    @ObservedObject var quotaShare = QuotaShareService.shared
     @State var ccSwitchDirInput: String = UserDefaults.standard.string(forKey: DefaultsKey.ccSwitchConfigDirOverride) ?? ""
     @State var isTestingRemoteConnection = false
     @State var remoteConnectionState: RemoteConnectionState = .idle
@@ -134,6 +140,9 @@ struct SettingsView: View {
         .onAppear {
             remoteHostInput = settings.remoteHost
             remotePortInput = "\(settings.remotePort)"
+            remoteTokenInput = QuotaShareTokenStore.load(.remote) ?? ""
+            sharePortInput = "\(settings.shareQuotaPort)"
+            shareAddresses = QuotaShareService.shareAddresses()
         }
         .onChange(of: hideDockIcon) { _, newValue in
             UserDefaults.standard.set(newValue, forKey: DefaultsKey.hideDockIcon)

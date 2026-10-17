@@ -35,13 +35,13 @@
 <table>
   <tr>
     <td width="132" align="center">
-      <a href="https://fluxionai.world/register?source=github&amp;campaign=github-aiusage&amp;promo=AIUSAGE"><img src="docs/images/fluxion-ai-logo.png" alt="Fluxion AI" width="88"></a><br>
-      <strong>Fluxion AI</strong>
+      <strong>Sidrune AI</strong>
     </td>
     <td>
-      Fluxion AI 通过统一 API，提供可靠、高性价比的 GPT、Claude 及其他主流 AI 模型接入服务。<br>
-      相比官方 API 定价，最高可节省 70%；通过此链接注册，即可获赠 3 美元 API 额度。<br>
-      <a href="https://fluxionai.world/register?source=github&amp;campaign=github-aiusage&amp;promo=AIUSAGE"><strong>注册 Fluxion AI，领取 3 美元 API 额度 →</strong></a>
+      <a href="https://fluxionai.space/register?source=github&amp;campaign=github-sidrune-aiusage&amp;promo=SDRAIUSAGE"><img src="docs/images/sidrune-ai-banner.png" alt="Sidrune AI — 一套 API 接入主流 AI 模型，注册获赠 3 美元额度。" width="100%"></a><br>
+      一套 API，接入 GPT、Claude 及其他主流 AI 模型。<br>
+      新用户注册即获赠 3 美元 API 额度。活动代码：<code>SDRAIUSAGE</code>。<br>
+      <a href="https://fluxionai.space/register?source=github&amp;campaign=github-sidrune-aiusage&amp;promo=SDRAIUSAGE"><strong>注册 Sidrune AI →</strong></a>
     </td>
   </tr>
   <tr>
@@ -65,6 +65,18 @@
       <strong>覆盖文本、图像、视频与音乐的 400+ 模型平台。</strong><br>
       多渠道模型聚合、价格透明，覆盖 Claude 官方渠道、AWSB、CCMax、Kiro、Seedance、Kling、Veo、HappyHorse 等。<br>
       <a href="https://api-aimodels.com/register?aff=DrSm"><strong>访问 Sucloud →</strong></a>
+    </td>
+  </tr>
+  <tr>
+    <td width="132" align="center">
+      <a href="https://baipiao.org/"><img src="docs/images/baipiao-logo.jpg" alt="白嫖 BaiPiao" width="88"></a><br>
+      <strong>白嫖 BaiPiao</strong>
+    </td>
+    <td>
+      <strong>白嫖有门路，好东西不迷路。</strong><br>
+      AI 福利与免费资源分享社区，汇集免费 API 额度、AI 工具、服务器与域名资源。<br>
+      查订阅价格、看中转测评，与社区用户一起发现好资源、交流使用经验。<br>
+      <a href="https://baipiao.org/"><strong>逛逛白嫖社区 · baipiao.org →</strong></a>
     </td>
   </tr>
 </table>
@@ -91,7 +103,7 @@
 
 | 功能 | 说明 |
 | --- | --- |
-| **12+ AI 服务商** | Codex、Copilot、Cursor、Antigravity、Kiro、Warp、Gemini CLI、Droid、Claude Code、OpenCode、Kimi、MiniMax — 一个看板搞定 |
+| **12+ AI 服务商** | Codex、Copilot、Cursor、Antigravity、Kiro、Warp、Gemini CLI（Code Assist Standard / Enterprise）、Droid、Claude Code、OpenCode、Kimi、MiniMax — 一个看板搞定 |
 | **多账号管理** | 同一服务商多个账号独立刷新，一键切换 CLI 活跃账号 |
 | **用量统计** | 统一汇总 Claude/Codex 代理归档、仅统计 Token 的 Codex 非代理会话，以及 OpenCode 本地会话账本：按模型拆分费用与 Token，趋势曲线、多时段分析，可按来源聚合查看 |
 | **Claude Code 代理** | 用 Claude Code 跑 DeepSeek、GPT、Ollama 等任意 OpenAI 兼容模型；Anthropic 透传模式记录用量 |

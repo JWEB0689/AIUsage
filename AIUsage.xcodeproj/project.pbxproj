@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        C1CS00010000000000000001 /* ClaudeSubscriptionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1CS00010000000000000002 /* ClaudeSubscriptionManager.swift */; };
+        C1CS00020000000000000001 /* ClaudeSubscriptionConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1CS00020000000000000002 /* ClaudeSubscriptionConnectionView.swift */; };
+        C1CS00030000000000000001 /* ClaudeSubscriptionAccountActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1CS00030000000000000002 /* ClaudeSubscriptionAccountActions.swift */; };
 		16107C5456181DB224F92CB4 /* ProxyViewModel+UsageArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E3E7768D2A94C7B19550E40 /* ProxyViewModel+UsageArchive.swift */; };
 		1E871734213E6EFD191F8398 /* StatsDataAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D613C7828C6DACECB0171A7 /* StatsDataAdapter.swift */; };
 		1ED5CE49B33A74A1DF312F2A /* ScienceSandbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB3625A62FC18DD31DE20CB9 /* ScienceSandbox.swift */; };
@@ -27,6 +30,7 @@
 		5EFAD7712F87AFE700A15674 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5EFAD7402F87AC7100A15674 /* Preview Assets.xcassets */; };
 		5EFAD7732F87AFE700A15674 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFAD7472F87AC7100A15674 /* DashboardView.swift */; };
 		5EFAD7742F87AFE700A15674 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFAD7442F87AC7100A15674 /* APIService.swift */; };
+		A5A0E1C12F9A001000A15674 /* QuotaShareService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A0E1C02F9A001000A15674 /* QuotaShareService.swift */; };
 		5EFAD7752F87AFE700A15674 /* ProviderCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFAD7492F87AC7100A15674 /* ProviderCard.swift */; };
 		5EFAD7762F87AFE700A15674 /* ProvidersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFAD74A2F87AC7100A15674 /* ProvidersView.swift */; };
 		5EFAD7772F87AFE700A15674 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFAD73D2F87AC7100A15674 /* AppState.swift */; };
@@ -53,6 +57,7 @@
 		5EFPA0222F91000200A15674 /* ProviderManagedImportStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFPA0212F91000200A15674 /* ProviderManagedImportStore.swift */; };
 		5EFPA0322F91000300A15674 /* CLIExecutableResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFPA0312F91000300A15674 /* CLIExecutableResolver.swift */; };
 		5EFPA0422F91000400A15674 /* CodexLoginCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFPA0412F91000400A15674 /* CodexLoginCoordinator.swift */; };
+		C1CS00040000000000000001 /* ClaudeLoginCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1CS00040000000000000002 /* ClaudeLoginCoordinator.swift */; };
 		5EFPA0522F91000500A15674 /* GeminiLoginCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFPA0512F91000500A15674 /* GeminiLoginCoordinator.swift */; };
 		5EFPA0562F91000550A15674 /* AntigravityLoginCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFPA0552F91000550A15674 /* AntigravityLoginCoordinator.swift */; };
 		5EFPA0582F91000580A15674 /* CopilotLoginCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFPA0572F91000580A15674 /* CopilotLoginCoordinator.swift */; };
@@ -99,6 +104,7 @@
 		A2B3C4F02F96001000A15674 /* SettingsView+Chrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B3C4EF2F96001000A15674 /* SettingsView+Chrome.swift */; };
 		A2B3C4F02F9C001000A15674 /* ProxyViewModel+ProxyOnlyMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B3C4EF2F9C001000A15674 /* ProxyViewModel+ProxyOnlyMode.swift */; };
 		A2B3C4F12F96001000A15699 /* ProviderLoginStatusCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B3C4F02F96001000A15699 /* ProviderLoginStatusCard.swift */; };
+		C1A0C0DE0000000000000001 /* ProviderConnectComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A0C0DE0000000000000002 /* ProviderConnectComponents.swift */; };
 		A2B3C4F22F96001000A15674 /* SettingsView+Titles.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B3C4F12F96001000A15674 /* SettingsView+Titles.swift */; };
 		A2B3C4F32F96001000A15699 /* LoginPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B3C4F22F96001000A15699 /* LoginPhase.swift */; };
 		A2B3C4F42F96001000A15674 /* SettingsView+QuotaPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B3C4F32F96001000A15674 /* SettingsView+QuotaPreview.swift */; };
@@ -228,6 +234,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+        C1CS00010000000000000002 /* ClaudeSubscriptionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSubscriptionManager.swift; sourceTree = "<group>"; };
+        C1CS00020000000000000002 /* ClaudeSubscriptionConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSubscriptionConnectionView.swift; sourceTree = "<group>"; };
+        C1CS00030000000000000002 /* ClaudeSubscriptionAccountActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSubscriptionAccountActions.swift; sourceTree = "<group>"; };
 		00A12FE22E8E59EF630BA439 /* UsageTrack.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UsageTrack.swift; sourceTree = "<group>"; };
 		1C8773DDEF6B585EC2A61FE2 /* ScienceRealAdopt.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScienceRealAdopt.swift; sourceTree = "<group>"; };
 		AB01SCAP02F92000000A15674 /* ScienceAuthProxy.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScienceAuthProxy.swift; sourceTree = "<group>"; };
@@ -252,6 +261,7 @@
 		5EFAD7402F87AC7100A15674 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		5EFAD7422F87AC7100A15674 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5EFAD7442F87AC7100A15674 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
+		A5A0E1C02F9A001000A15674 /* QuotaShareService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaShareService.swift; sourceTree = "<group>"; };
 		5EFAD7462F87AC7100A15674 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		5EFAD7472F87AC7100A15674 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		5EFAD7482F87AC7100A15674 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
@@ -279,6 +289,7 @@
 		5EFPA0212F91000200A15674 /* ProviderManagedImportStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderManagedImportStore.swift; sourceTree = "<group>"; };
 		5EFPA0312F91000300A15674 /* CLIExecutableResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CLIExecutableResolver.swift; sourceTree = "<group>"; };
 		5EFPA0412F91000400A15674 /* CodexLoginCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexLoginCoordinator.swift; sourceTree = "<group>"; };
+		C1CS00040000000000000002 /* ClaudeLoginCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeLoginCoordinator.swift; sourceTree = "<group>"; };
 		5EFPA0512F91000500A15674 /* GeminiLoginCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiLoginCoordinator.swift; sourceTree = "<group>"; };
 		5EFPA0552F91000550A15674 /* AntigravityLoginCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityLoginCoordinator.swift; sourceTree = "<group>"; };
 		5EFPA0572F91000580A15674 /* CopilotLoginCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotLoginCoordinator.swift; sourceTree = "<group>"; };
@@ -321,6 +332,7 @@
 		A2B3C4EF2F96001000A15674 /* SettingsView+Chrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView+Chrome.swift"; sourceTree = "<group>"; };
 		A2B3C4EF2F9C001000A15674 /* ProxyViewModel+ProxyOnlyMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProxyViewModel+ProxyOnlyMode.swift"; sourceTree = "<group>"; };
 		A2B3C4F02F96001000A15699 /* ProviderLoginStatusCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderLoginStatusCard.swift; sourceTree = "<group>"; };
+		C1A0C0DE0000000000000002 /* ProviderConnectComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderConnectComponents.swift; sourceTree = "<group>"; };
 		A2B3C4F12F96001000A15674 /* SettingsView+Titles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView+Titles.swift"; sourceTree = "<group>"; };
 		A2B3C4F22F96001000A15699 /* LoginPhase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginPhase.swift; sourceTree = "<group>"; };
 		A2B3C4F32F96001000A15674 /* SettingsView+QuotaPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView+QuotaPreview.swift"; sourceTree = "<group>"; };
@@ -567,6 +579,7 @@
 		5EFAD7452F87AC7100A15674 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+                C1CS00010000000000000002 /* ClaudeSubscriptionManager.swift */,
 				C1CPA0022FD0002000B26789 /* CLIProxyPaths.swift */,
 				C1CPA0042FD0003000B26789 /* CLIProxyReleaseClient.swift */,
 				C1CPA0062FD0004000B26789 /* CLIProxyBinaryStore.swift */,
@@ -578,6 +591,7 @@
 				C1CPA0162FD000C000B26789 /* CLIProxyCredentialAdapter.swift */,
 				C1CPA0582FD0034000B26789 /* CLIProxyGeminiCredentialBridge.swift */,
 				5EFAD7442F87AC7100A15674 /* APIService.swift */,
+				A5A0E1C02F9A001000A15674 /* QuotaShareService.swift */,
 				B1REFA002F97002000A15674 /* ProxyRuntimeService.swift */,
 				B1PA00002F97002000A15674 /* ProxyPortArbiter.swift */,
 				B1GP00102F97002000A15674 /* GlobalProxyRuntime.swift */,
@@ -601,6 +615,8 @@
 		5EFAD74C2F87AC7100A15674 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+                C1CS00020000000000000002 /* ClaudeSubscriptionConnectionView.swift */,
+                C1CS00030000000000000002 /* ClaudeSubscriptionAccountActions.swift */,
 				C1CPA00A2FD0006000B26789 /* SubscriptionGatewayView.swift */,
 				A1F1A5C02F99008000A15674 /* GatewayRuntimeControl.swift */,
 				C1CPA0182FD000D000B26789 /* SubscriptionGatewayComponents.swift */,
@@ -692,6 +708,7 @@
 				5EFAD7882F87B10200A15674 /* ProviderAccountEditorView.swift */,
 				A2B3C4D92F96001000A15674 /* ProviderAccountEditorView+Sections.swift */,
 				A2B3C4F02F96001000A15699 /* ProviderLoginStatusCard.swift */,
+				C1A0C0DE0000000000000002 /* ProviderConnectComponents.swift */,
 				A2B3C4DB2F96001000A15674 /* ProviderAccountEditorView+Actions.swift */,
 				5EFAD78C2F87B10400A15674 /* SavedAccountViews.swift */,
 				5EFAD78E2F87B10500A15674 /* AccountNoteEditorView.swift */,
@@ -742,6 +759,7 @@
 				5EFPA0212F91000200A15674 /* ProviderManagedImportStore.swift */,
 				5EFPA0312F91000300A15674 /* CLIExecutableResolver.swift */,
 				5EFPA0412F91000400A15674 /* CodexLoginCoordinator.swift */,
+				C1CS00040000000000000002 /* ClaudeLoginCoordinator.swift */,
 				A2B3C4F22F96001000A15699 /* LoginPhase.swift */,
 				5EFPA0512F91000500A15674 /* GeminiLoginCoordinator.swift */,
 				5EFPA0552F91000550A15674 /* AntigravityLoginCoordinator.swift */,
@@ -875,6 +893,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                C1CS00010000000000000001 /* ClaudeSubscriptionManager.swift in Sources */,
+                C1CS00020000000000000001 /* ClaudeSubscriptionConnectionView.swift in Sources */,
+                C1CS00030000000000000001 /* ClaudeSubscriptionAccountActions.swift in Sources */,
 				C1CPA0012FD0001000B26789 /* CLIProxyGatewayModels.swift in Sources */,
 				C1CPA0032FD0002000B26789 /* CLIProxyPaths.swift in Sources */,
 				C1CPA0052FD0003000B26789 /* CLIProxyReleaseClient.swift in Sources */,
@@ -919,6 +940,7 @@
 				5EFSAL012F99004100A15674 /* SubscriptionAccountListModels.swift in Sources */,
 				5EFSAS012F99004200A15674 /* SubscriptionAppScopeControl.swift in Sources */,
 				5EFAD7742F87AFE700A15674 /* APIService.swift in Sources */,
+				A5A0E1C12F9A001000A15674 /* QuotaShareService.swift in Sources */,
 				B1REFA012F97002000A15674 /* ProxyRuntimeService.swift in Sources */,
 				B1PA00012F97002000A15674 /* ProxyPortArbiter.swift in Sources */,
 				B1GP00012F97002000A15674 /* GlobalProxyConfig.swift in Sources */,
@@ -1031,6 +1053,7 @@
 				5EFPA0222F91000200A15674 /* ProviderManagedImportStore.swift in Sources */,
 				5EFPA0322F91000300A15674 /* CLIExecutableResolver.swift in Sources */,
 				5EFPA0422F91000400A15674 /* CodexLoginCoordinator.swift in Sources */,
+				C1CS00040000000000000001 /* ClaudeLoginCoordinator.swift in Sources */,
 				A2B3C4F32F96001000A15699 /* LoginPhase.swift in Sources */,
 				5EFPA0522F91000500A15674 /* GeminiLoginCoordinator.swift in Sources */,
 				5EFPA0562F91000550A15674 /* AntigravityLoginCoordinator.swift in Sources */,
@@ -1054,6 +1077,7 @@
 				A2B3C4F02F9C001000A15674 /* ProxyViewModel+ProxyOnlyMode.swift in Sources */,
 				A2B3C4DA2F96001000A15674 /* ProviderAccountEditorView+Sections.swift in Sources */,
 				A2B3C4F12F96001000A15699 /* ProviderLoginStatusCard.swift in Sources */,
+				C1A0C0DE0000000000000001 /* ProviderConnectComponents.swift in Sources */,
 				A2B3C4DC2F96001000A15674 /* ProviderAccountEditorView+Actions.swift in Sources */,
 				A2B3C4E02F96001000A15674 /* CostTrackingView+Types.swift in Sources */,
 				A2B3C4EA2F96001000A15674 /* CostTrackingView+Helpers.swift in Sources */,
@@ -1243,7 +1267,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.15.22;
+				MARKETING_VERSION = 0.15.26;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aiusage.desktop.debug;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -1275,7 +1299,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.15.22;
+				MARKETING_VERSION = 0.15.26;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aiusage.desktop;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;

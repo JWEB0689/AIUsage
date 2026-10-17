@@ -14,6 +14,8 @@ final class CopilotLoginCoordinator: ObservableObject {
     @Published private(set) var phase: LoginPhase = .idle
     @Published private(set) var userCode: String?
     @Published private(set) var verificationURL: URL?
+    /// GitHub 设备页不支持预填验证码；打开浏览器前先把验证码放进剪贴板，用户粘贴即可。
+    @Published private(set) var codeCopied = false
     // 仅内部记录人类可读进度，UI 不直接展示；保持普通存储属性避免无谓的视图重渲染。
     private var outputSummary: String?
     @Published private(set) var githubToken: String?
@@ -54,6 +56,7 @@ final class CopilotLoginCoordinator: ObservableObject {
         phase = .launching
         userCode = nil
         verificationURL = nil
+        codeCopied = false
         outputSummary = nil
         githubToken = nil
         accountLogin = nil
@@ -128,6 +131,9 @@ final class CopilotLoginCoordinator: ObservableObject {
                 "Enter the code in your browser to authorize AIUsage.",
                 "在浏览器中输入验证码以授权 AIUsage。"
             )
+
+            NSPasteboard.general.clearContents()
+            codeCopied = NSPasteboard.general.setString(uCode, forType: .string)
 
             if let verificationURL {
                 NSWorkspace.shared.open(verificationURL)

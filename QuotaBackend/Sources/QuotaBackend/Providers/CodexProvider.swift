@@ -900,7 +900,7 @@ public struct CodexProvider: MultiAccountProviderFetcher, CredentialAcceptingPro
     }
 
     /// 展示名（贴合 ChatGPT 现行方案命名）。未知值原样返回。
-    static func planDisplayName(forRaw raw: String?) -> String? {
+    public static func planDisplayName(forRaw raw: String?) -> String? {
         guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         switch normalizePlanKey(raw) {
         case "free": return "Free"

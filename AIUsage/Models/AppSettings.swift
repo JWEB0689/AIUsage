@@ -148,6 +148,9 @@ enum DefaultsKey {
     static let remoteHost = "remoteHost"
     static let remotePort = "remotePort"
     static let selectedProviderIds = "selectedProviderIds"
+    /// 主机端：是否把本机额度快照只读共享给远程模式的其它 AIUsage。缺省=false。
+    static let shareQuotaEnabled = "shareQuotaEnabled"
+    static let shareQuotaPort = "shareQuotaPort"
     static let showNotifications = "showNotifications"
     /// 侧边栏「代理」分组的展开/收起状态。缺省=true（展开）。
     static let sidebarProxiesGroupExpanded = "sidebarProxiesGroupExpanded"
@@ -254,6 +257,42 @@ final class AppSettings: ObservableObject {
     @Published var remoteHost: String = UserDefaults.standard.string(forKey: DefaultsKey.remoteHost) ?? "127.0.0.1"
     @Published var remotePort: Int = UserDefaults.standard.integer(forKey: DefaultsKey.remotePort) == 0 ? 4318 : UserDefaults.standard.integer(forKey: DefaultsKey.remotePort)
 
+    /// 远程后端的基础 URL：容忍用户粘贴的 `http://host:port/`，并给 IPv6 字面量加方括号。
+    var remoteBaseURL: String {
+        Self.remoteBaseURL(host: remoteHost, port: remotePort)
+    }
+
+    static func remoteBaseURL(host rawHost: String, port: Int) -> String {
+        var host = parseRemoteAddress(rawHost).host
+        if host.isEmpty { host = "127.0.0.1" }
+        let formattedHost = host.contains(":") ? "[\(host)]" : host
+        return "http://\(formattedHost):\(port)"
+    }
+
+    /// 把「地址」输入拆成主机与可选端口：`http://100.64.1.2:4318/`、`mini.tailnet.ts.net`、`[fd7a::1]:4318` 都能识别。
+    static func parseRemoteAddress(_ raw: String) -> (host: String, port: Int?) {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let schemeRange = text.range(of: "://") {
+            text = String(text[schemeRange.upperBound...])
+        }
+        if let slash = text.firstIndex(of: "/") {
+            text = String(text[..<slash])
+        }
+        if text.hasPrefix("[") {
+            let host = String(text.dropFirst().prefix { $0 != "]" })
+            let rest = text.drop { $0 != "]" }.dropFirst()
+            let port = rest.hasPrefix(":") ? Int(rest.dropFirst()) : nil
+            return (host, port)
+        }
+        if text.filter({ $0 == ":" }).count == 1, let colon = text.firstIndex(of: ":") {
+            return (String(text[..<colon]), Int(text[text.index(after: colon)...]))
+        }
+        return (text, nil)
+    }
+
+    @Published var shareQuotaEnabled: Bool = UserDefaults.standard.bool(forKey: DefaultsKey.shareQuotaEnabled)
+    @Published var shareQuotaPort: Int = UserDefaults.standard.integer(forKey: DefaultsKey.shareQuotaPort) == 0 ? 4318 : UserDefaults.standard.integer(forKey: DefaultsKey.shareQuotaPort)
+
     @Published var proxyAutoRestoreOnLaunch: Bool = UserDefaults.standard.bool(forKey: DefaultsKey.proxyAutoRestoreOnLaunch)
 
     /// 侧边栏中被用户隐藏的导航分区（存 `AppSection.rawValue`）。常驻分区即使被写入也不会真正隐藏。
@@ -350,13 +389,15 @@ final class AppSettings: ObservableObject {
         $remoteHost.dropFirst().sink { [weak self] host in
             defaults.set(host, forKey: DefaultsKey.remoteHost)
             guard let self else { return }
-            self.onRemoteSettingsChanged?("http://\(host):\(self.remotePort)")
+            self.onRemoteSettingsChanged?(Self.remoteBaseURL(host: host, port: self.remotePort))
         }.store(in: &cancellables)
         $remotePort.dropFirst().sink { [weak self] port in
             defaults.set(port, forKey: DefaultsKey.remotePort)
             guard let self else { return }
-            self.onRemoteSettingsChanged?("http://\(self.remoteHost):\(port)")
+            self.onRemoteSettingsChanged?(Self.remoteBaseURL(host: self.remoteHost, port: port))
         }.store(in: &cancellables)
+        $shareQuotaEnabled.dropFirst().sink { defaults.set($0, forKey: DefaultsKey.shareQuotaEnabled) }.store(in: &cancellables)
+        $shareQuotaPort.dropFirst().sink { defaults.set($0, forKey: DefaultsKey.shareQuotaPort) }.store(in: &cancellables)
         $proxyAutoRestoreOnLaunch.dropFirst().sink { defaults.set($0, forKey: DefaultsKey.proxyAutoRestoreOnLaunch) }.store(in: &cancellables)
         $hiddenSidebarSections.dropFirst().sink { defaults.set(Array($0), forKey: DefaultsKey.hiddenSidebarSections) }.store(in: &cancellables)
         $sidebarProxiesGroupExpanded.dropFirst().sink { defaults.set($0, forKey: DefaultsKey.sidebarProxiesGroupExpanded) }.store(in: &cancellables)

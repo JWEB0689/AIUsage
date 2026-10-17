@@ -47,6 +47,9 @@ struct ProviderAccountGroupSection: View {
 
                 VStack(alignment: .trailing, spacing: 8) {
                     HStack(spacing: 8) {
+                        if let restriction = appState.providerCatalogItem(for: group.providerId)?.restriction(for: appState.language) {
+                            pill(text: restriction, tint: .orange)
+                        }
                         pill(
                             text: group.isScanningEnabled ? L("Scanning", "扫描中") : L("Paused", "已暂停"),
                             tint: group.isScanningEnabled ? .green : .orange
@@ -62,7 +65,7 @@ struct ProviderAccountGroupSection: View {
                             Label(
                                 refreshCoordinator.isProviderRefreshInFlight(group.providerId)
                                     ? L("Refreshing App", "刷新该应用中")
-                                    : L("Refresh App", "刷新该应用"),
+                                    : group.providerId == "claude-subscription" ? L("Check sync", "检查同步") : L("Refresh App", "刷新该应用"),
                                 systemImage: "arrow.clockwise"
                             )
                                 .font(.caption.weight(.semibold))
@@ -110,7 +113,7 @@ struct ProviderAccountGroupSection: View {
 
                     if let refreshedAt = refreshCoordinator.providerRefreshDate(for: group.providerId) {
                         HStack(spacing: 4) {
-                            Text(L("This app updated", "本应用更新于"))
+                            Text(group.providerId == "claude-subscription" ? L("Sync checked", "同步检查于") : L("This app updated", "本应用更新于"))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                             RefreshableTimeView(

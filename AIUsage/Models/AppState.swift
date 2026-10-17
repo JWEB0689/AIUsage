@@ -26,16 +26,18 @@ class AppState: ObservableObject {
 
     private static let providerCatalogItems: [ProviderCatalogItem] = [
         ProviderCatalogItem(id: "codex", titleEn: "Codex", titleZh: "Codex", summaryEn: "Official OpenAI subscription windows and quotas", summaryZh: "OpenAI 官方订阅窗口与配额", channel: "cli", kind: .official),
+        ProviderCatalogItem(id: "claude-subscription", titleEn: "Claude Subscription", titleZh: "Claude 订阅", summaryEn: "Code subscription quota", summaryZh: "Code 订阅额度", channel: "cli", kind: .official),
         ProviderCatalogItem(id: "copilot", titleEn: "Copilot", titleZh: "Copilot", summaryEn: "GitHub Copilot account entitlements and premium lanes", summaryZh: "GitHub Copilot 账号权益与高级通道", channel: "ide", kind: .official),
         ProviderCatalogItem(id: "cursor", titleEn: "Cursor", titleZh: "Cursor", summaryEn: "Cursor membership allowances and plan usage", summaryZh: "Cursor 会员额度与计划用量", channel: "ide", kind: .official),
         ProviderCatalogItem(id: "antigravity", titleEn: "Antigravity", titleZh: "Antigravity", summaryEn: "Per-model IDE subscription quotas across many model families", summaryZh: "按模型拆分的 IDE 订阅配额", channel: "ide", kind: .official),
         ProviderCatalogItem(id: "kiro", titleEn: "Kiro", titleZh: "Kiro", summaryEn: "Kiro IDE request lanes from the live app account", summaryZh: "来自 Kiro 应用账号的实时请求通道", channel: "ide", kind: .official),
         ProviderCatalogItem(id: "warp", titleEn: "Warp", titleZh: "Warp", summaryEn: "Warp request reserves and desktop app credits", summaryZh: "Warp 请求余额与桌面应用额度", channel: "ide", kind: .official),
-        ProviderCatalogItem(id: "gemini", titleEn: "Gemini CLI", titleZh: "Gemini CLI", summaryEn: "Gemini CLI project quotas and model-family windows", summaryZh: "Gemini CLI 项目配额与模型族窗口", channel: "cli", kind: .official),
         ProviderCatalogItem(id: "kimi", titleEn: "Kimi Code", titleZh: "Kimi Code", summaryEn: "Kimi Code subscription weekly usage and rolling rate-limit windows", summaryZh: "Kimi Code 订阅的本周用量与滚动频控窗口", channel: "cli", kind: .official),
         ProviderCatalogItem(id: "minimax", titleEn: "MiniMax Token Plan", titleZh: "MiniMax Token Plan", summaryEn: "MiniMax Token Plan 5-hour rolling and weekly subscription credits", summaryZh: "MiniMax Token Plan 5 小时滚动与周窗口的订阅额度", channel: "cli", kind: .official),
         ProviderCatalogItem(id: "droid", titleEn: "Droid", titleZh: "Droid", summaryEn: "Token-heavy usage pools and remaining allowances", summaryZh: "以 token 为主的额度池与剩余额度", channel: "cli", kind: .official),
-        ProviderCatalogItem(id: "claude", titleEn: "Claude", titleZh: "Claude", summaryEn: "Code, Desktop and Science usage recorded by Claude Gateway", summaryZh: "Claude Gateway 记录的 Code、Desktop 与 Science 用量", channel: "local", kind: .costTracking),
+        // Google 于 2026-06-18 停止个人账号（免费 / AI Pro / Ultra）使用 Gemini CLI，只剩 Code Assist Standard / Enterprise 可用：保留并标注，排在官方来源末尾。
+        ProviderCatalogItem(id: "gemini", titleEn: "Gemini CLI", titleZh: "Gemini CLI", summaryEn: "Gemini Code Assist Standard / Enterprise quotas. Google ended personal-account access on June 18, 2026", summaryZh: "Gemini Code Assist Standard / Enterprise 配额；个人账号已于 2026-06-18 被 Google 停用", channel: "cli", kind: .official, restrictionEn: "Enterprise only", restrictionZh: "仅企业版"),
+        ProviderCatalogItem(id: "claude", titleEn: "Claude", titleZh: "Claude", summaryEn: "Proxy costs and Claude Code non-proxy tokens", summaryZh: "Claude 代理费用与 Code 非代理 Token", channel: "local", kind: .costTracking),
         ProviderCatalogItem(id: "codex-cost", titleEn: "Codex", titleZh: "Codex", summaryEn: "Proxy cost ledger plus non-proxy Codex token usage", summaryZh: "Codex 代理费用账本与非代理 Token 用量", channel: "local", kind: .costTracking),
         ProviderCatalogItem(id: "opencode", titleEn: "OpenCode", titleZh: "OpenCode", summaryEn: "Local token and cost ledger from OpenCode sessions", summaryZh: "基于 OpenCode 本地会话的 Token 与费用账本", channel: "local", kind: .costTracking)
     ]
@@ -138,6 +140,11 @@ class AppState: ObservableObject {
         // 补回 AuthImports 中尚未进入订阅列表的 Codex（已存在 / 永久删除则跳过）。
         Task { @MainActor in
             await CLIProxyGatewayManager.shared.backfillSubscriptionAccountsFromAuthImportsIfNeeded()
+        }
+
+        // 「共享给其他设备」跟随设置启停；关闭时不监听任何端口。
+        Task { @MainActor in
+            QuotaShareService.shared.activate()
         }
 
         refreshCoordinator.configure(
@@ -355,13 +362,15 @@ class AppState: ObservableObject {
         )
     }
 
+    /// 返回新账号在仪表盘中的 provider result id，连接弹窗据此展示首批额度。
+    @discardableResult
     func registerAuthenticatedCredential(
         _ credential: AccountCredential,
         usage: ProviderUsage,
         note: String? = nil
-    ) throws {
+    ) throws -> String {
         let providerTitle = providerCatalogItem(for: credential.providerId)?.title(for: language) ?? credential.providerId
-        try refreshCoordinator.registerAuthenticatedCredential(
+        return try refreshCoordinator.registerAuthenticatedCredential(
             credential,
             usage: usage,
             note: note,
@@ -388,6 +397,7 @@ class AppState: ObservableObject {
     }
 
     func deleteAccount(_ entry: ProviderAccountEntry) {
+        ClaudeSubscriptionManager.shared.releaseDeletedAccounts([entry])
         accountStore.deleteAccount(entry) { [weak self] in
             self?.refreshCoordinator.removeLiveProviders(matching: entry)
             self?.refreshCoordinator.reapplyVisibleSortedProviders()
@@ -407,6 +417,7 @@ class AppState: ObservableObject {
     }
 
     func deleteAccounts(_ entries: [ProviderAccountEntry]) {
+        ClaudeSubscriptionManager.shared.releaseDeletedAccounts(entries)
         accountStore.deleteAccounts(entries) { [weak self] in
             self?.refreshCoordinator.removeLiveProviders(matching: entries)
             self?.refreshCoordinator.reapplyVisibleSortedProviders()

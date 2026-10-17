@@ -23,6 +23,12 @@ public struct WarpProvider: ProviderFetcher {
         throw ProviderError("not_found", "Warp app data not found. Make sure Warp is installed and has been used at least once.")
     }
 
+    /// 只确认某个 Warp 版本已在本机缓存额度信息（即登录并用过），不读钥匙串、不会弹授权框。
+    public static func localAppDomain() -> String? {
+        let provider = WarpProvider()
+        return domains.first { provider.readDefaultsJSON(domain: $0, key: "AIRequestLimitInfo") != nil }
+    }
+
     private func fetchFromDomain(_ domain: String) async throws -> ProviderUsage {
         guard let limitInfo = readDefaultsJSON(domain: domain, key: "AIRequestLimitInfo") else {
             throw ProviderError("not_found", "No AIRequestLimitInfo in \(domain)")

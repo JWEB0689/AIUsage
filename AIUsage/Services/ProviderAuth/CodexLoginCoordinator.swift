@@ -39,7 +39,8 @@ final class CodexLoginCoordinator: ObservableObject {
         }
     }
 
-    func start() {
+    /// `executable` 由连接弹窗在检测阶段解析好传入，避免点击登录时再跑一次登录 shell。
+    func start(executable: String? = nil) {
         cancel()
 
         phase = .launching
@@ -68,9 +69,12 @@ final class CodexLoginCoordinator: ObservableObject {
 
         sessionDirectoryURL = sessionDirectory
 
-        guard let codexExecutable = aiusageResolvedExecutable(named: "codex") else {
+        guard let codexExecutable = executable ?? aiusageCodexExecutable() else {
             cleanup(removeArtifacts: true)
-            phase = .failed("AIUsage could not find the Codex CLI. Install `@openai/codex` first.")
+            phase = .failed(L(
+                "AIUsage could not find Codex. Install the Codex CLI or the ChatGPT desktop app first.",
+                "未找到 Codex。请先安装 Codex CLI 或 ChatGPT 桌面版。"
+            ))
             return
         }
 

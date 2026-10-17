@@ -179,7 +179,13 @@ extension SettingsView {
             title: L("Data & Refresh", "数据与刷新"),
             subtitle: L("Backend mode and refresh intervals.", "后端模式和数据刷新频率。")
         ) {
-            settingsBlock(title: L("Backend Mode", "后端模式")) {
+            settingsBlock(
+                title: L("Backend Mode", "后端模式"),
+                subtitle: L(
+                    "Local: sign in and fetch quotas on this Mac. Remote: read the quota snapshot shared by AIUsage on another Mac — no sign-in needed here.",
+                    "本地：在本机登录并抓取各账号额度。远程：读取另一台 Mac 上 AIUsage 共享的额度快照，本机无需登录账号。"
+                )
+            ) {
                 CapsuleSegmentedPicker(
                     options: [
                         CapsuleSegmentOption("local", title: L("Local", "本地")),
@@ -196,57 +202,11 @@ extension SettingsView {
             if settings.backendMode == "remote" {
                 Divider()
 
-                settingsBlock(title: L("Host", "地址")) {
-                    TextField("127.0.0.1", text: $remoteHostInput)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit { applyRemoteSettings() }
-                }
-
+                remoteBackendBlock
+            } else {
                 Divider()
 
-                settingsBlock(title: L("Port", "端口")) {
-                    TextField("4318", text: $remotePortInput)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: 120, alignment: .leading)
-                        .onSubmit { applyRemoteSettings() }
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 10) {
-                        Button(L("Apply", "应用")) { applyRemoteSettings() }
-                            .buttonStyle(.borderedProminent)
-
-                        Button {
-                            Task { await testRemoteConnection() }
-                        } label: {
-                            HStack(spacing: 6) {
-                                if isTestingRemoteConnection {
-                                    SmallProgressView()
-                                        .frame(width: 12, height: 12)
-                                } else {
-                                    Image(systemName: "bolt.horizontal.circle")
-                                }
-                                Text(L("Test Connection", "测试连接"))
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(isTestingRemoteConnection)
-                    }
-
-                    remoteConnectionStatusView
-
-                    Text(
-                        L(
-                            "Connect to a QuotaServer running on another machine. Start server: swift run QuotaServer --host 0.0.0.0 --port 4318",
-                            "连接到其他机器上的 QuotaServer。启动命令：swift run QuotaServer --host 0.0.0.0 --port 4318"
-                        )
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
+                quotaShareBlock
             }
 
             Divider()

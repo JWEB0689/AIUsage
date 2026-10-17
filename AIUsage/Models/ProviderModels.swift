@@ -17,6 +17,9 @@ struct ProviderCatalogItem: Identifiable, Hashable {
     let summaryZh: String
     let channel: String?
     let kind: ProviderCatalogKind
+    /// 服务商自身的使用限制（如「仅企业版」），在选择列表与账号分组上以标签提示。
+    var restrictionEn: String? = nil
+    var restrictionZh: String? = nil
 }
 
 enum ProviderPickerMode: String, Identifiable {
@@ -133,7 +136,11 @@ struct ProviderAccountEntry: Identifiable {
     }
 
     var isConnected: Bool {
-        liveProvider != nil
+        if providerId == "claude-subscription" {
+            guard let liveProvider else { return false }
+            return !liveProvider.needsCredentialConnection && liveProvider.sourceFilePath != nil && liveProvider.status != .error
+        }
+        return liveProvider != nil
     }
 
     var canDelete: Bool {
@@ -204,6 +211,10 @@ extension ProviderCatalogItem {
 
     func summary(for language: String) -> String {
         language == "zh" ? summaryZh : summaryEn
+    }
+
+    func restriction(for language: String) -> String? {
+        language == "zh" ? restrictionZh : restrictionEn
     }
 }
 

@@ -1,6 +1,6 @@
 import Foundation
 
-func aiusageDefaultCLIPath() -> String {
+nonisolated func aiusageDefaultCLIPath() -> String {
     let home = FileManager.default.homeDirectoryForCurrentUser.path
     var segments = [
         "/opt/homebrew/bin",
@@ -22,7 +22,7 @@ func aiusageDefaultCLIPath() -> String {
     return segments.filter { seen.insert($0).inserted }.joined(separator: ":")
 }
 
-func aiusageResolvedExecutable(named executable: String) -> String? {
+nonisolated func aiusageResolvedExecutable(named executable: String) -> String? {
     if let path = aiusageRunLoginShellWhich(executable) { return path }
     if let path = aiusageRunWhich(executable) { return path }
 
@@ -51,9 +51,38 @@ func aiusageResolvedExecutable(named executable: String) -> String? {
     return nil
 }
 
+/// Codex CLI: prefer the user's own `codex`, then fall back to the official binary bundled with
+/// the ChatGPT desktop app or the OpenAI IDE extension, so signing in never requires a separate install.
+nonisolated func aiusageCodexExecutable() -> String? {
+    aiusageResolvedExecutable(named: "codex") ?? aiusageBundledCodexExecutables().first
+}
+
+nonisolated func aiusageBundledCodexExecutables() -> [String] {
+    let fileManager = FileManager.default
+    let home = fileManager.homeDirectoryForCurrentUser.path
+    var paths = ["/Applications", "\(home)/Applications"].map {
+        "\($0)/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
+    }
+
+    for editor in [".vscode", ".vscode-insiders", ".cursor", ".windsurf", ".antigravity", ".kiro"] {
+        let root = "\(home)/\(editor)/extensions"
+        guard let entries = try? fileManager.contentsOfDirectory(atPath: root) else { continue }
+        let newestFirst = entries
+            .filter { $0.hasPrefix("openai.chatgpt-") }
+            .sorted { $0.localizedStandardCompare($1) == .orderedDescending }
+        for entry in newestFirst {
+            let binRoot = "\(root)/\(entry)/bin"
+            let platforms = (try? fileManager.contentsOfDirectory(atPath: binRoot)) ?? []
+            paths += platforms.filter { $0.hasPrefix("macos") }.sorted().map { "\(binRoot)/\($0)/codex" }
+        }
+    }
+
+    return paths.filter { fileManager.isExecutableFile(atPath: $0) }
+}
+
 // MARK: - Internal
 
-private func aiusageNvmNodeBinPaths(home: String) -> [String] {
+nonisolated private func aiusageNvmNodeBinPaths(home: String) -> [String] {
     let nvmDir = "\(home)/.nvm/versions/node"
     guard let entries = try? FileManager.default.contentsOfDirectory(atPath: nvmDir) else { return [] }
     return entries
@@ -63,7 +92,7 @@ private func aiusageNvmNodeBinPaths(home: String) -> [String] {
 }
 
 /// Runs `which` using the app's current environment.
-private func aiusageRunWhich(_ name: String) -> String? {
+nonisolated private func aiusageRunWhich(_ name: String) -> String? {
     let whichPath = "/usr/bin/which"
     guard FileManager.default.isExecutableFile(atPath: whichPath) else { return nil }
 
@@ -91,7 +120,7 @@ private func aiusageRunWhich(_ name: String) -> String? {
 
 /// Spawns a login shell to inherit .zshrc / .bashrc PATH, then runs `which`.
 /// macOS GUI apps don't inherit terminal PATH, so this is the reliable fallback.
-private func aiusageRunLoginShellWhich(_ name: String) -> String? {
+nonisolated private func aiusageRunLoginShellWhich(_ name: String) -> String? {
     let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
     guard FileManager.default.isExecutableFile(atPath: shell) else { return nil }
 

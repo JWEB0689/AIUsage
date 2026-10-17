@@ -375,7 +375,7 @@ public struct CursorProvider: ProviderFetcher, CredentialAcceptingProvider {
         usage.accountEmail = accountEmail
         usage.accountName  = userInfo?["name"] as? String
         usage.usageAccountId = accountId
-        usage.accountPlan  = formatMembership(membershipType)
+        usage.accountPlan  = Self.formatMembership(membershipType)
 
         usage.primary   = makePercentWindow(used: primaryPercent, billingEnd: billingEnd, resetDesc: resetDesc)
         usage.secondary = autoPercent.map { makePercentWindow(used: $0, billingEnd: billingEnd, resetDesc: resetDesc) }
@@ -403,14 +403,14 @@ public struct CursorProvider: ProviderFetcher, CredentialAcceptingProvider {
         return w
     }
 
-    private func formatMembership(_ raw: String?) -> String? {
+    static func formatMembership(_ raw: String?) -> String? {
         guard let r = raw?.trimmingCharacters(in: .whitespaces), !r.isEmpty else { return nil }
         switch r.lowercased() {
         case "enterprise": return "Enterprise"
         case "pro": return "Pro"
         case "hobby": return "Hobby"
         case "team": return "Team"
-        default: return r.capitalized
+        default: return r.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
 

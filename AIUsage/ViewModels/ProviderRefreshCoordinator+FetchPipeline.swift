@@ -169,7 +169,7 @@ extension ProviderRefreshCoordinator {
     @MainActor
     func fetchSingleProviderRemote(_ providerId: String) async -> ProviderRefreshResult {
         let refreshedAt = Date()
-        APIService.shared.updateBaseURL("http://\(settings.remoteHost):\(settings.remotePort)")
+        APIService.shared.updateBaseURL(settings.remoteBaseURL)
         do {
             let results = try await APIService.shared.fetchProviderResults(providerId)
             // 主线程仅重组为 Sendable 元组（无正则），本地化在后台执行器完成。
@@ -227,7 +227,7 @@ extension ProviderRefreshCoordinator {
     @MainActor
     func fetchDashboardRemote(showMessageOnFailure: Bool) async -> ProviderRefreshResult {
         let refreshedAt = Date()
-        APIService.shared.updateBaseURL("http://\(settings.remoteHost):\(settings.remotePort)")
+        APIService.shared.updateBaseURL(settings.remoteBaseURL)
         do {
             let dashboard = try await APIService.shared.fetchDashboard(providerIds: selectedProviderIDList())
             // 主线程仅重组为 Sendable 元组（无正则）；providers + overview 本地化在后台执行器完成。

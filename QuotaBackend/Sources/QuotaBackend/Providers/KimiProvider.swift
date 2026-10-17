@@ -10,7 +10,7 @@ import Foundation
 //   - usage  → 本周/总额度（primary）
 //   - limits → 频控窗口（如 5 小时滚动窗口）（secondary / tertiary）
 // 认证: Kimi Code API Key（sk-...，从 https://www.kimi.com/code/console 创建），
-//      或从本地 ~/.kimi/config.toml 自动发现。
+//      或从本地 ~/.kimi-code/config.toml、~/.kimi/config.toml 自动发现。
 
 public struct KimiProvider: ProviderFetcher, CredentialAcceptingProvider {
     public let id = "kimi"
@@ -343,7 +343,7 @@ public struct KimiProvider: ProviderFetcher, CredentialAcceptingProvider {
         return nil
     }
 
-    // MARK: - Local Discovery (~/.kimi/config.toml)
+    // MARK: - Local Discovery (~/.kimi-code/config.toml, ~/.kimi/config.toml)
 
     public struct KimiLocalCredential: Sendable {
         public let apiKey: String
@@ -351,12 +351,24 @@ public struct KimiProvider: ProviderFetcher, CredentialAcceptingProvider {
         public let providerSection: String?
     }
 
-    /// 从 `~/.kimi/config.toml` 里发现 Kimi Code 的 API Key（kimi-cli `/login` 后写入）。
-    public static func discoverLocalCredentials() -> [KimiLocalCredential] {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let path = "\(home)/.kimi/config.toml"
-        guard let content = try? String(contentsOfFile: path, encoding: .utf8) else { return [] }
+    /// 新版 Kimi Code CLI 的配置在 `~/.kimi-code/`，旧版 kimi-cli 在 `~/.kimi/`。
+    static let localConfigPaths = [".kimi-code/config.toml", ".kimi/config.toml"]
 
+    /// 从本地 CLI 配置里发现 Kimi Code 的 API Key。用 OAuth 登录时 `api_key` 为空，不会被当成 Key。
+    public static func discoverLocalCredentials(
+        homeDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path
+    ) -> [KimiLocalCredential] {
+        var seen = Set<String>()
+        return localConfigPaths
+            .flatMap { relativePath -> [KimiLocalCredential] in
+                let path = "\(homeDirectory)/\(relativePath)"
+                guard let content = try? String(contentsOfFile: path, encoding: .utf8) else { return [] }
+                return credentials(inConfig: content, sourcePath: path)
+            }
+            .filter { seen.insert($0.apiKey).inserted }
+    }
+
+    private static func credentials(inConfig content: String, sourcePath path: String) -> [KimiLocalCredential] {
         var results: [KimiLocalCredential] = []
         var section: String?
         var sectionType: String?
@@ -396,10 +408,7 @@ public struct KimiProvider: ProviderFetcher, CredentialAcceptingProvider {
             }
         }
         flush()
-
-        // 按 apiKey 去重，保留首次出现。
-        var seen = Set<String>()
-        return results.filter { seen.insert($0.apiKey).inserted }
+        return results
     }
 
     private static func tomlString(_ raw: String) -> String {

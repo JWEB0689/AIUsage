@@ -347,7 +347,7 @@ The `SettingsView` uses a **sidebar navigation + content area** two-column layou
 | Category | Content |
 |----------|---------|
 | **General** | Language, theme, display currency, launch at login, hide dock icon, minimize to tray on close (#39), keep running in background, sidebar item visibility toggles |
-| **Data & Refresh** | Backend mode (local/remote), remote server config, provider/CC auto-refresh intervals |
+| **Data & Refresh** | Backend mode (local/remote), remote host/port/token, "Share with other devices" (in-app read-only quota snapshot server, `QuotaShareServer`, token + Tailscale/LAN-only), provider/CC auto-refresh intervals |
 | **Menu Bar** | Quota account pinning, cost source pinning + per-source config |
 | **Card Appearance** | Quota card style (bar/ring/segments), progress meaning (remaining/used), preview |
 | **Proxy** | Auto-start proxy on launch, proxy log retention |

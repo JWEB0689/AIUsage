@@ -35,13 +35,13 @@
 <table>
   <tr>
     <td width="132" align="center">
-      <a href="https://fluxionai.world/register?source=github&amp;campaign=github-aiusage&amp;promo=AIUSAGE"><img src="docs/images/fluxion-ai-logo.png" alt="Fluxion AI" width="88"></a><br>
-      <strong>Fluxion AI</strong>
+      <strong>Sidrune AI</strong>
     </td>
     <td>
-      Fluxion AI provides reliable, cost-efficient access to GPT, Claude, and other leading AI models through one unified API.<br>
-      Save up to 70% compared with official API pricing—and get $3 in API credits when you sign up through this link.<br>
-      <a href="https://fluxionai.world/register?source=github&amp;campaign=github-aiusage&amp;promo=AIUSAGE"><strong>Get $3 in API credits with Fluxion AI →</strong></a>
+      <a href="https://fluxionai.space/register?source=github&amp;campaign=github-sidrune-aiusage&amp;promo=SDRAIUSAGE"><img src="docs/images/sidrune-ai-banner.png" alt="Sidrune AI — One API. Every leading AI model. Sign up and get $3 credit." width="100%"></a><br>
+      One API for GPT, Claude, and other leading AI models.<br>
+      Sign up and get $3 in API credit. Promo: <code>SDRAIUSAGE</code>.<br>
+      <a href="https://fluxionai.space/register?source=github&amp;campaign=github-sidrune-aiusage&amp;promo=SDRAIUSAGE"><strong>Sign up with Sidrune AI →</strong></a>
     </td>
   </tr>
   <tr>
@@ -65,6 +65,18 @@
       <strong>400+ models across text, image, video, and music.</strong><br>
       A multi-channel model hub with transparent pricing and broad coverage, including Claude official channels, AWSB, CCMax, Kiro, Seedance, Kling, Veo, HappyHorse, and more.<br>
       <a href="https://api-aimodels.com/register?aff=DrSm"><strong>Visit Sucloud →</strong></a>
+    </td>
+  </tr>
+  <tr>
+    <td width="132" align="center">
+      <a href="https://baipiao.org/"><img src="docs/images/baipiao-logo.jpg" alt="BaiPiao" width="88"></a><br>
+      <strong>BaiPiao</strong>
+    </td>
+    <td>
+      <strong>Find your way to freebies. Keep the good stuff in sight.</strong><br>
+      A community for AI freebies and free resources: API credits, AI tools, servers, and domains.<br>
+      Compare subscription prices, explore API relay reviews, and share useful finds and hands-on experiences.<br>
+      <a href="https://baipiao.org/"><strong>Explore BaiPiao · baipiao.org →</strong></a>
     </td>
   </tr>
 </table>
@@ -91,7 +103,7 @@
 
 | Feature | Description |
 | --- | --- |
-| **12+ AI Providers** | Codex, Copilot, Cursor, Antigravity, Kiro, Warp, Gemini CLI, Droid, Claude Code, OpenCode, Kimi, MiniMax — one dashboard |
+| **12+ AI Providers** | Codex, Copilot, Cursor, Antigravity, Kiro, Warp, Gemini CLI (Code Assist Standard / Enterprise), Droid, Claude Code, OpenCode, Kimi, MiniMax — one dashboard |
 | **Multi-account** | Multiple accounts per provider, independent refresh, one-click CLI switching |
 | **Usage Stats** | Unified cost & token breakdown from Claude/Codex proxy archives, token-only non-proxy Codex sessions, and OpenCode's local session ledger — per-model trends, time-period analysis, source-aware aggregation |
 | **Claude Code Proxy** | Use Claude Code with DeepSeek, GPT, Ollama or any OpenAI-compatible model; Anthropic passthrough for usage logging |

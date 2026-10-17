@@ -3,208 +3,196 @@ import QuotaBackend
 
 extension ProviderAccountEditorView {
 
-    // MARK: - Login Button
+    // MARK: - Ready
+
+    var readyContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let notice = authPlan.notice {
+                ConnectMessageCard(icon: "exclamationmark.triangle.fill", tint: .orange, title: notice.title, detail: notice.detail)
+            }
+
+            if !detected.isEmpty {
+                VStack(spacing: 10) {
+                    ForEach(detected) { session in
+                        detectedCard(session)
+                    }
+                }
+            }
+
+            if connectableSessions.isEmpty || (authPlan.method == .apiKey && showKeyEntry) {
+                signInArea
+            }
+
+            if let errorMessage {
+                Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if authPlan.method != .desktopApp {
+                Label(L("Credentials stay in this Mac's Keychain.", "凭证只保存在本机钥匙串。"), systemImage: "lock.shield")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func detectedCard(_ session: DetectedSession) -> some View {
+        let candidate = session.candidate
+        let failed = failedCandidateIds.contains(session.id)
+        // 多个可连接会话（或正在手动输入 Key）时每张卡片自带按钮；只有一个时由页脚主按钮连接。
+        let showsInlineButton = !session.isConnected
+            && (failed || connectableSessions.count > 1 || (authPlan.method == .apiKey && showKeyEntry))
+        return ConnectAccountCard(
+            title: candidate.title,
+            plan: candidate.plan,
+            caption: session.isConnected ? L("Already syncing", "已在同步") : detectedCaption(candidate),
+            tint: accent,
+            checked: session.isConnected
+        ) {
+            if showsInlineButton {
+                Button(failed ? L("Retry", "重试") : L("Connect", "连接")) {
+                    Task { await connect(candidate) }
+                }
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private func detectedCaption(_ candidate: ProviderAuthCandidate) -> String {
+        let source = candidate.subtitle?.nilIfBlank ?? candidate.detail
+        // Key 类凭证附上脱敏后的 Key，便于区分多个来源。
+        guard candidate.authMethod == .apiKey, !candidate.detail.isEmpty else { return source }
+        return "\(source) · \(candidate.detail)"
+    }
+
+    /// 没有可连接的本机会话时：Key 输入框，或说明这个服务商怎么登录。
+    @ViewBuilder
+    private var signInArea: some View {
+        switch authPlan.method {
+        case .apiKey:
+            apiKeyEntryForm
+        case .codexCLI where codexExecutable == nil:
+            ConnectMessageCard(
+                icon: "shippingbox",
+                tint: .orange,
+                title: L("Codex isn't installed", "未找到 Codex"),
+                detail: L("AIUsage signs in through the official Codex CLI. Install the Codex CLI or the ChatGPT desktop app, then check again.",
+                          "AIUsage 通过官方 Codex CLI 完成 ChatGPT 登录。安装 Codex CLI 或 ChatGPT 桌面版后点「重新检测」。")
+            )
+        default:
+            // 本机会话都已在同步时不再重复说明，页脚直接提供新登录入口。
+            if detected.isEmpty {
+                ConnectMessageCard(
+                    icon: "person.crop.circle.badge.questionmark",
+                    tint: .secondary,
+                    title: authPlan.signedOutTitle,
+                    detail: signedOutDetail
+                )
+            }
+        }
+    }
+
+    private var signedOutDetail: String {
+        switch authPlan.method {
+        case .kiro where !appInstalled:
+            return L("Authorize an AWS Builder ID in the browser. For Google or GitHub accounts, install Kiro and sign in there first.",
+                     "在浏览器中授权 AWS Builder ID。Google / GitHub 账号请先安装 Kiro 并在应用中登录。")
+        case .desktopApp where !appInstalled:
+            return L("Install \(providerTitle) and sign in, then come back here.", "安装 \(providerTitle) 并登录后回到这里。")
+        default:
+            return authPlan.signedOutDetail
+        }
+    }
+
+    // MARK: - API Key Entry
+
+    private struct APIKeyForm {
+        let title: String
+        let placeholder: String
+        let hint: String
+        let consoleTitle: String
+        let supportsRegion: Bool
+        let consoleURL: (ProviderAPIRegion) -> String
+    }
+
+    private var apiKeyForm: APIKeyForm? {
+        switch providerId {
+        case "kimi":
+            return APIKeyForm(
+                title: "Kimi Code API Key",
+                placeholder: "sk-…",
+                hint: L("Create an API key in the matching Kimi console and paste it here. China and International keys are not interchangeable.",
+                        "在对应区域的 Kimi 控制台创建 API Key 后粘贴到这里。国内与海外 Key 不能混用。"),
+                consoleTitle: L("Get API Key", "获取 API Key"),
+                supportsRegion: true,
+                consoleURL: { region in
+                    region == .international ? "https://platform.moonshot.ai/" : "https://www.kimi.com/code/console"
+                }
+            )
+        case "minimax":
+            return APIKeyForm(
+                title: L("MiniMax Subscription Key", "MiniMax 订阅 Key"),
+                placeholder: "sk-cp-…",
+                hint: L("Use a Token Plan key starting with sk-cp-… from the matching MiniMax platform. Pay-as-you-go sk-… keys and cross-region keys won’t work here.",
+                        "请使用对应区域平台上的 Token Plan 订阅 Key（sk-cp-…）。按量付费 sk-… 以及跨区 Key 在这里不可用。"),
+                consoleTitle: L("Get Subscription Key", "获取订阅 Key"),
+                supportsRegion: true,
+                consoleURL: { region in
+                    region == .international
+                        ? "https://platform.minimax.io/user-center/basic-information/interface-key"
+                        : "https://platform.minimaxi.com/user-center/basic-information/interface-key"
+                }
+            )
+        case "droid":
+            return APIKeyForm(
+                title: "Factory API Key",
+                placeholder: "fk-…",
+                hint: L("In Factory, open Settings → API Keys, create a key starting with fk-… and paste it above.",
+                        "在 Factory 后台打开 Settings → API Keys，新建一个 fk- 开头的 Key 并粘贴到上方。"),
+                consoleTitle: L("Get API Key", "获取 API Key"),
+                supportsRegion: false,
+                consoleURL: { _ in "https://app.factory.ai/settings/api-keys" }
+            )
+        default:
+            return nil
+        }
+    }
 
     @ViewBuilder
-    var loginButton: some View {
-        if authPlan.supportsEmbeddedWebLogin && ProviderLoginURLs.webLoginProviders.contains(providerId) {
-            Button {
-                errorMessage = nil
-                statusMessage = nil
-                showWebLogin = true
-            } label: {
-                Label(
-                    providerId == "droid" ? L("Connect Account", "连接账号") : L("Sign In", "登录"),
-                    systemImage: "globe"
-                )
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(isWorking)
-        } else if let action = primaryLaunchAction {
-            Button {
-                performLaunch(action)
-            } label: {
-                Label(action.title(for: appState.language), systemImage: iconName(for: action))
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(isWorking)
-        }
-    }
+    private var apiKeyEntryForm: some View {
+        if let form = apiKeyForm {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(form.title).font(.subheadline.weight(.semibold))
 
-    var detectedCandidatesSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(L("Detected Sessions", "已检测到的会话"))
-                    .font(.subheadline.weight(.semibold))
+                if form.supportsRegion {
+                    apiRegionPicker(selection: $apiRegion)
+                }
 
-                Spacer()
+                SecureField(form.placeholder, text: $apiKey)
+                    .textFieldStyle(.roundedBorder)
+
+                Text(form.hint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Button {
-                    refreshCandidates()
-                } label: {
-                    Label(L("Refresh", "刷新"), systemImage: "arrow.clockwise")
-                        .font(.caption.weight(.semibold))
-                }
-                .buttonStyle(.borderless)
-                .controlSize(.small)
-                .disabled(isWorking)
-            }
-
-            Text(L(
-                "AIUsage found local login state for this provider. Connect one of the sessions below directly.",
-                "AIUsage 检测到了这个服务商的本地登录状态。你可以直接连接下面的会话。"
-            ))
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            VStack(spacing: 10) {
-                ForEach(candidates) { candidate in
-                    HStack(alignment: .top, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(candidate.title)
-                                .font(.subheadline.weight(.semibold))
-                                .lineLimit(1)
-
-                            if let subtitle = candidate.subtitle?.nilIfBlank {
-                                Text(subtitle)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Text(candidate.detail)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                        }
-
-                        Spacer(minLength: 12)
-
-                        Button(L("Connect", "连接")) {
-                            Task { await importCandidate(candidate) }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                        .disabled(isWorking)
-                    }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(AppSurface.card(colorScheme))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                    )
-                }
-            }
-        }
-    }
-
-    // MARK: - Kimi Code API Key Entry
-
-    var kimiKeyEntrySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L("Kimi Code API Key", "Kimi Code API Key"))
-                .font(.subheadline.weight(.semibold))
-
-            apiRegionPicker(selection: $kimiAPIRegion)
-
-            SecureField("sk-…", text: $kimiAPIKey)
-                .textFieldStyle(.roundedBorder)
-                .disabled(isWorking)
-                .onSubmit { connectKimiAPIKey() }
-
-            Text(L(
-                "Create an API key in the matching Kimi console and paste it here. China and International keys are not interchangeable. The key is stored in Keychain.",
-                "在对应区域的 Kimi 控制台创建 API Key 后粘贴到这里。国内与海外 Key 不能混用。Key 会存入钥匙串。"
-            ))
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 10) {
-                Button {
-                    connectKimiAPIKey()
-                } label: {
-                    Label(L("Connect", "连接"), systemImage: "link")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(isWorking || kimiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                Button {
-                    if let url = URL(string: kimiConsoleURL(for: kimiAPIRegion)) {
+                    if let url = URL(string: form.consoleURL(apiRegion)) {
                         NSWorkspace.shared.open(url)
                     }
                 } label: {
-                    Label(L("Get API Key", "获取 API Key"), systemImage: "safari")
+                    Label(form.consoleTitle, systemImage: "safari")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .disabled(isWorking)
+                .buttonStyle(.link)
+                .font(.caption)
             }
         }
     }
-
-    // MARK: - MiniMax Token Plan API Key Entry
-
-    var miniMaxKeyEntrySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L("MiniMax Subscription Key", "MiniMax 订阅 Key"))
-                .font(.subheadline.weight(.semibold))
-
-            apiRegionPicker(selection: $miniMaxAPIRegion)
-
-            SecureField("sk-cp-…", text: $miniMaxAPIKey)
-                .textFieldStyle(.roundedBorder)
-                .disabled(isWorking)
-                .onSubmit { connectMiniMaxAPIKey() }
-
-            Text(L(
-                "Use a Token Plan key starting with sk-cp-… from the matching MiniMax platform. Pay-as-you-go sk-… keys and cross-region keys won’t work here. The key is stored in Keychain.",
-                "请使用对应区域平台上的 Token Plan 订阅 Key（sk-cp-…）。按量付费 sk-… 以及跨区 Key 在这里不可用。Key 会存入钥匙串。"
-            ))
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 10) {
-                Button {
-                    connectMiniMaxAPIKey()
-                } label: {
-                    Label(L("Connect", "连接"), systemImage: "link")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(isWorking || miniMaxAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                Button {
-                    if let url = URL(string: miniMaxConsoleURL(for: miniMaxAPIRegion)) {
-                        NSWorkspace.shared.open(url)
-                    }
-                } label: {
-                    Label(L("Get Subscription Key", "获取订阅 Key"), systemImage: "safari")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .disabled(isWorking)
-            }
-        }
-    }
-
-    // MARK: - API Region
 
     private func apiRegionPicker(selection: Binding<ProviderAPIRegion>) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(L("Region", "区域"))
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
             Picker("", selection: selection) {
                 Text(L("Auto", "自动")).tag(ProviderAPIRegion.auto)
                 Text(L("China", "国内")).tag(ProviderAPIRegion.china)
@@ -212,7 +200,6 @@ extension ProviderAccountEditorView {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .disabled(isWorking)
             Text(apiRegionHint(selection.wrappedValue))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
@@ -223,374 +210,222 @@ extension ProviderAccountEditorView {
     private func apiRegionHint(_ region: ProviderAPIRegion) -> String {
         switch region {
         case .auto:
-            return L(
-                "Tries China first, then International.",
-                "先试国内端点，失败再试海外。"
-            )
+            return L("Tries China first, then International.", "先试国内端点，失败再试海外。")
         case .china:
-            return L(
-                "Only the China API. Use the China console for the key.",
-                "只请求国内 API，请到国内控制台取 Key。"
+            return L("Only the China API. Use the China console for the key.", "只请求国内 API，请到国内控制台取 Key。")
+        case .international:
+            return L("Only the International API. Use the International console for the key.", "只请求海外 API，请到海外控制台取 Key。")
+        }
+    }
+
+    // MARK: - Connected
+
+    func connectedContent(_ account: ConnectedAccount) -> some View {
+        let data = connectedProviderData(account)
+        let windows = Array((data?.windows ?? []).filter { $0.remainingPercent != nil }.prefix(3))
+        return VStack(alignment: .leading, spacing: 14) {
+            ConnectAccountCard(
+                title: account.title,
+                plan: data?.membershipLabel?.nilIfBlank ?? account.plan,
+                caption: windows.isEmpty ? L("Connected", "已连接") : L("Synced", "已同步"),
+                tint: accent,
+                checked: true
             )
-        case .international:
-            return L(
-                "Only the International API. Use the International console for the key.",
-                "只请求海外 API，请到海外控制台取 Key。"
-            )
-        }
-    }
-
-    private func kimiConsoleURL(for region: ProviderAPIRegion) -> String {
-        switch region {
-        case .international:
-            return "https://platform.moonshot.ai/"
-        case .china, .auto:
-            return "https://www.kimi.com/code/console"
-        }
-    }
-
-    private func miniMaxConsoleURL(for region: ProviderAPIRegion) -> String {
-        switch region {
-        case .international:
-            return "https://platform.minimax.io/user-center/basic-information/interface-key"
-        case .china, .auto:
-            return "https://platform.minimaxi.com/user-center/basic-information/interface-key"
-        }
-    }
-
-    // MARK: - Droid API Key Entry
-
-    var droidKeyEntrySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L("Factory API Key", "Factory API Key"))
-                .font(.subheadline.weight(.semibold))
-
-            SecureField("fk-…", text: $droidAPIKey)
-                .textFieldStyle(.roundedBorder)
-                .disabled(isWorking)
-                .onSubmit { connectDroidAPIKey() }
-
-            Text(L(
-                "How to get a key: click “Get API Key” → sign in to Factory → Settings → API Keys → create a key starting with fk-… → paste it above. This is the most stable way and avoids browser-cookie / refresh-token issues. The key is stored in Keychain.",
-                "如何获取：点击「获取 API Key」→ 登录 Factory → Settings → API Keys → 新建一个 fk- 开头的 Key → 粘贴到上方。这是最稳定的方式，可避开浏览器 Cookie / 刷新令牌的脆弱问题。Key 会存入钥匙串。"
-            ))
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 10) {
-                Button {
-                    connectDroidAPIKey()
-                } label: {
-                    Label(L("Connect", "连接"), systemImage: "link")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(isWorking || droidAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                Button {
-                    if let url = URL(string: "https://app.factory.ai/settings/api-keys") {
-                        NSWorkspace.shared.open(url)
+            if windows.isEmpty {
+                Text(L("Quota appears on the dashboard after the next refresh.", "额度会在下次刷新后显示在仪表盘中。"))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(Array(windows.enumerated()), id: \.offset) { _, window in
+                        ConnectQuotaRow(label: window.label, remaining: window.remainingPercent ?? 0, labelWidth: 110)
                     }
-                } label: {
-                    Label(L("Get API Key", "获取 API Key"), systemImage: "safari")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .disabled(isWorking)
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(AppSurface.card(colorScheme)))
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
     }
 
-    // MARK: - Batch Import
-
-    var batchImportButton: some View {
-        Button {
-            showBatchImport = true
-        } label: {
-            Label(
-                L("Batch Import from Folder", "从文件夹批量导入"),
-                systemImage: "square.and.arrow.down.on.square"
-            )
+    /// 连接后的实时数据：账号写入时已插入首批额度，后台刷新完成后这里随之更新。
+    private func connectedProviderData(_ account: ConnectedAccount) -> ProviderData? {
+        if let resultId = account.resultId {
+            return refreshCoordinator.providers.first { $0.id == resultId }
         }
-        .buttonStyle(.bordered)
-        .controlSize(.regular)
-        .disabled(isWorking)
+        return refreshCoordinator.providers.first { $0.baseProviderId == providerId && !$0.needsCredentialConnection }
     }
 
-    // MARK: - Shared Login Presentation
+    // MARK: - Browser / Device Sign-In
 
-    /// 把任意协调器的 phase 映射成卡片的单一展示状态。
-    /// 错误优先：导入账号失败（errorMessage）或浏览器步骤失败都直接显示红色错误，
-    /// 不会再出现「绿色完成 + 红色报错」同现。导入账号进行中显示「接入中」。
-    func loginVisualState(_ phase: LoginPhase) -> ProviderLoginVisualState {
-        if let errorMessage, !errorMessage.isEmpty {
-            return .failed(errorMessage)
+    var activeLoginPhase: LoginPhase {
+        switch providerId {
+        case "codex": codexLogin.phase
+        case "gemini": geminiLogin.phase
+        case "antigravity": antigravityLogin.phase
+        case "copilot": copilotLogin.phase
+        case "kiro": kiroLogin.phase
+        default: .idle
         }
-        if isWorking {
-            return .connecting
+    }
+
+    @ViewBuilder
+    var activeLoginCard: some View {
+        switch providerId {
+        case "codex": codexLoginSection
+        case "gemini": geminiLoginSection
+        case "antigravity": antigravityLoginSection
+        case "copilot": copilotLoginSection
+        case "kiro": kiroLoginSection
+        default: EmptyView()
         }
+    }
+
+    private func loginVisualState(_ phase: LoginPhase) -> ProviderLoginVisualState {
         switch phase {
-        case .idle, .launching:
-            return .launching
-        case .waitingForBrowser:
-            return .awaitingBrowser
-        case .waitingForCompletion:
-            return .awaitingCompletion
-        case .succeeded:
-            return .succeeded
-        case .failed(let message):
-            return .failed(message)
+        case .idle, .launching: return .launching
+        case .waitingForBrowser: return .awaitingBrowser
+        case .waitingForCompletion: return .awaitingCompletion
+        case .succeeded: return .succeeded
+        case .failed(let message): return .failed(message)
         }
     }
 
-    var connectingLabel: String {
+    private var connectingLabel: String {
         L("Connecting account…", "正在接入账号…")
     }
 
-    var hasActiveLoginCard: Bool {
-        showsCodexBrowser || showsGeminiLogin || showsAntigravityLogin
-            || showsCopilotLogin || showsKiroLogin
-    }
-
-    var codexBrowserSection: some View {
+    private var codexLoginSection: some View {
         ProviderLoginStatusCard(
             state: loginVisualState(codexLogin.phase),
-            title: L("Secure ChatGPT Sign-In", "安全的 ChatGPT 登录"),
+            title: L("Sign in with ChatGPT", "使用 ChatGPT 登录"),
             description: L(
-                "AIUsage has opened the official ChatGPT sign-in page in your browser. Finish the browser step, then return here and the account will connect automatically.",
-                "AIUsage 已在浏览器中打开 ChatGPT 官方登录页。你只要在浏览器里完成授权，再回到这里，账号就会自动接入。"
+                "AIUsage opened the official ChatGPT sign-in page in your browser. Approve it there and the account connects automatically — your existing Codex login isn't touched.",
+                "已在浏览器打开 ChatGPT 官方登录页，授权后自动接入；不会改动你现有的 Codex 登录。"
             ),
             inProgressLabel: codexPhaseLabel,
             connectingLabel: connectingLabel,
-            succeededLabel: L("Login completed", "登录完成"),
-            copyLink: codexLogin.authURL == nil ? nil : ProviderLoginAction(
-                title: L("Copy Link", "复制链接"),
-                perform: {
-                    guard let authURL = codexLogin.authURL else { return }
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(authURL.absoluteString, forType: .string)
-                    statusMessage = L("Link copied.", "链接已复制。")
-                }
-            ),
-            reopen: codexLogin.authURL == nil ? nil : ProviderLoginAction(
-                title: L("Open Browser Again", "重新打开浏览器"),
-                perform: { codexLogin.reopenInBrowser() }
-            ),
-            onCancel: {
-                showCodexBrowser = false
-                errorMessage = nil
-                statusMessage = nil
-                codexLogin.cancel()
-            }
-        )
-    }
-
-    var codexPhaseLabel: String {
-        switch codexLogin.phase {
-        case .launching:
-            return L("Starting...", "启动中...")
-        case .waitingForBrowser:
-            return L("Complete sign-in in your browser", "请在浏览器中完成登录")
-        case .waitingForCompletion:
-            return L("Waiting for authentication...", "等待认证完成...")
-        default:
-            return ""
-        }
-    }
-
-    // MARK: - Status
-
-    @ViewBuilder
-    var statusFeedback: some View {
-        if hasActiveLoginCard {
-            // 登录卡片已自带状态/错误展示，避免底部重复一条 spinner 或红字。
-            EmptyView()
-        } else if isWorking {
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text(L("Connecting...", "连接中..."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        } else if let errorMessage {
-            HStack(spacing: 6) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .lineLimit(2)
-            }
-        } else if let statusMessage {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                Text(statusMessage)
-                    .font(.caption)
-                    .foregroundStyle(.green)
-            }
-        }
-    }
-
-    var geminiLoginSection: some View {
-        ProviderLoginStatusCard(
-            state: loginVisualState(geminiLogin.phase),
-            title: L("Secure Google Sign-In", "安全的 Google 登录"),
-            description: L(
-                "AIUsage has opened Gemini's official Google sign-in page in your browser. Finish the browser step, then return here and the account will connect automatically.",
-                "AIUsage 已经在浏览器中打开 Gemini 官方 Google 登录页。你只要在浏览器里完成授权，再回到这里，账号就会自动接入。"
-            ),
-            accountBadge: geminiLogin.accountEmail,
-            inProgressLabel: geminiPhaseLabel,
-            connectingLabel: connectingLabel,
-            succeededLabel: L("Google sign-in completed", "Google 登录已完成"),
-            reopen: geminiLogin.authURL == nil ? nil : ProviderLoginAction(
-                title: L("Open Browser Again", "重新打开浏览器"),
-                perform: { geminiLogin.reopenInBrowser() }
-            ),
-            onCancel: {
-                errorMessage = nil
-                statusMessage = nil
-                geminiLogin.cancel()
-            }
-        )
-    }
-
-    // MARK: - Antigravity Login
-
-    var antigravityLoginSection: some View {
-        ProviderLoginStatusCard(
-            state: loginVisualState(antigravityLogin.phase),
-            title: L("Secure Google Sign-In", "安全的 Google 登录"),
-            description: L(
-                "AIUsage has opened Antigravity's official Google sign-in page in your browser. Finish the browser step, then return here and the account will connect automatically.",
-                "AIUsage 已经在浏览器中打开 Antigravity 官方 Google 登录页。你只要在浏览器里完成授权，再回到这里，账号就会自动接入。"
-            ),
-            accountBadge: antigravityLogin.accountEmail,
-            inProgressLabel: antigravityPhaseLabel,
-            connectingLabel: connectingLabel,
-            succeededLabel: L("Google sign-in completed", "Google 登录已完成"),
-            reopen: antigravityLogin.authURL == nil ? nil : ProviderLoginAction(
-                title: L("Open Browser Again", "重新打开浏览器"),
-                perform: { antigravityLogin.reopenInBrowser() }
-            ),
-            onCancel: {
-                errorMessage = nil
-                statusMessage = nil
-                antigravityLogin.cancel()
-            }
-        )
-    }
-
-    // MARK: - Kiro Login
-
-    var kiroLoginSection: some View {
-        ProviderLoginStatusCard(
-            state: loginVisualState(kiroLogin.phase),
-            title: L("Kiro AWS SSO Login", "Kiro AWS SSO 登录"),
-            description: L(
-                "AIUsage will open the Kiro sign-in page in your browser. Supports Google, GitHub, Builder ID, and organization login.",
-                "AIUsage 会在浏览器中打开 Kiro 登录页，支持 Google、GitHub、Builder ID 和组织登录。"
-            ),
-            deviceCode: kiroLogin.userCode,
-            deviceCodePrompt: L("Enter this code on the Kiro sign-in page:", "在 Kiro 登录页面输入此验证码："),
-            accountBadge: kiroLogin.accountEmail,
-            inProgressLabel: kiroPhaseLabel,
-            connectingLabel: connectingLabel,
-            succeededLabel: L("Kiro sign-in completed", "Kiro 登录已完成"),
-            reopen: kiroLogin.verificationURL == nil ? nil : ProviderLoginAction(
-                title: L("Open Kiro Again", "重新打开 Kiro"),
-                perform: { kiroLogin.reopenInBrowser() }
-            ),
-            onCancel: {
-                errorMessage = nil
-                statusMessage = nil
-                kiroLogin.cancel()
+            succeededLabel: L("Signed in", "登录成功"),
+            copyLink: codexLogin.authURL == nil ? nil : ProviderLoginAction(title: L("Copy Link", "复制链接")) {
+                guard let authURL = codexLogin.authURL else { return }
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(authURL.absoluteString, forType: .string)
             },
-            cardMinHeight: 128
+            reopen: codexLogin.authURL == nil ? nil : ProviderLoginAction(title: L("Open Browser Again", "重新打开浏览器")) {
+                codexLogin.reopenInBrowser()
+            },
+            cardMinHeight: 0
         )
     }
 
-    var kiroPhaseLabel: String {
-        switch kiroLogin.phase {
-        case .launching:
-            return L("Preparing Kiro sign-in…", "正在准备 Kiro 登录…")
-        case .waitingForBrowser:
-            return L("Enter the code on the sign-in page", "在登录页上输入验证码")
-        case .waitingForCompletion:
-            return L("Verifying account…", "正在验证账号…")
-        default:
-            return ""
+    private var codexPhaseLabel: String {
+        switch codexLogin.phase {
+        case .launching: return L("Starting Codex…", "正在启动 Codex…")
+        case .waitingForBrowser: return L("Waiting for approval in your browser", "等待在浏览器中授权")
+        case .waitingForCompletion: return L("Confirming sign-in…", "正在确认登录…")
+        default: return ""
         }
     }
 
-    // MARK: - Copilot Login
+    private var geminiLoginSection: some View {
+        googleLoginSection(
+            phase: geminiLogin.phase,
+            description: L("AIUsage opened Gemini's official Google sign-in in your browser. Approve it there and the account connects automatically.",
+                           "已在浏览器打开 Gemini 官方 Google 登录页，授权后自动接入。"),
+            accountEmail: geminiLogin.accountEmail,
+            hasAuthURL: geminiLogin.authURL != nil,
+            reopen: { geminiLogin.reopenInBrowser() }
+        )
+    }
 
-    var copilotLoginSection: some View {
+    private var antigravityLoginSection: some View {
+        googleLoginSection(
+            phase: antigravityLogin.phase,
+            description: L("AIUsage opened Antigravity's official Google sign-in in your browser. Approve it there and the account connects automatically.",
+                           "已在浏览器打开 Antigravity 官方 Google 登录页，授权后自动接入。"),
+            accountEmail: antigravityLogin.accountEmail,
+            hasAuthURL: antigravityLogin.authURL != nil,
+            reopen: { antigravityLogin.reopenInBrowser() }
+        )
+    }
+
+    private func googleLoginSection(
+        phase: LoginPhase,
+        description: String,
+        accountEmail: String?,
+        hasAuthURL: Bool,
+        reopen: @escaping () -> Void
+    ) -> some View {
+        ProviderLoginStatusCard(
+            state: loginVisualState(phase),
+            title: L("Sign in with Google", "使用 Google 登录"),
+            description: description,
+            accountBadge: accountEmail,
+            inProgressLabel: googlePhaseLabel(phase),
+            connectingLabel: connectingLabel,
+            succeededLabel: L("Google sign-in completed", "Google 登录已完成"),
+            reopen: hasAuthURL ? ProviderLoginAction(title: L("Open Browser Again", "重新打开浏览器"), perform: reopen) : nil,
+            cardMinHeight: 0
+        )
+    }
+
+    private func googlePhaseLabel(_ phase: LoginPhase) -> String {
+        switch phase {
+        case .launching: return L("Preparing Google sign-in…", "正在准备 Google 登录…")
+        case .waitingForBrowser: return L("Waiting for approval in your browser", "等待在浏览器中授权")
+        case .waitingForCompletion: return L("Confirming sign-in…", "正在确认登录…")
+        default: return ""
+        }
+    }
+
+    private var copilotLoginSection: some View {
         ProviderLoginStatusCard(
             state: loginVisualState(copilotLogin.phase),
-            title: L("GitHub Device Flow", "GitHub 设备流登录"),
-            description: L(
-                "AIUsage will open the GitHub authorization page in your browser. Approve the request and the account will connect automatically.",
-                "AIUsage 会在浏览器中打开 GitHub 授权页。你确认授权后，账号会自动接入。"
-            ),
+            title: L("Sign in with GitHub", "使用 GitHub 登录"),
+            description: L("AIUsage opened the GitHub authorization page in your browser. Approve the request and the account connects automatically.",
+                           "已在浏览器打开 GitHub 授权页，确认后自动接入。"),
             deviceCode: copilotLogin.userCode,
-            deviceCodePrompt: L("Enter this code on the GitHub page:", "在 GitHub 页面输入此验证码："),
+            deviceCodePrompt: copilotLogin.codeCopied
+                ? L("Code copied — paste it on the GitHub page:", "验证码已复制，在 GitHub 页面粘贴即可：")
+                : L("Enter this code on the GitHub page:", "在 GitHub 页面输入此验证码："),
             accountBadge: copilotLogin.accountLogin.map { "@\($0)" },
-            inProgressLabel: copilotPhaseLabel,
+            inProgressLabel: devicePhaseLabel(copilotLogin.phase, waiting: L("Waiting for approval on GitHub", "等待在 GitHub 上授权")),
             connectingLabel: connectingLabel,
             succeededLabel: L("GitHub sign-in completed", "GitHub 登录已完成"),
-            reopen: copilotLogin.verificationURL == nil ? nil : ProviderLoginAction(
-                title: L("Open GitHub Again", "重新打开 GitHub"),
-                perform: { copilotLogin.reopenInBrowser() }
-            ),
-            onCancel: {
-                errorMessage = nil
-                statusMessage = nil
-                copilotLogin.cancel()
+            reopen: copilotLogin.verificationURL == nil ? nil : ProviderLoginAction(title: L("Open GitHub Again", "重新打开 GitHub")) {
+                copilotLogin.reopenInBrowser()
             },
-            cardMinHeight: 128
+            cardMinHeight: 0
         )
     }
 
-    var copilotPhaseLabel: String {
-        switch copilotLogin.phase {
-        case .launching:
-            return L("Preparing GitHub sign-in…", "正在准备 GitHub 登录…")
-        case .waitingForBrowser:
-            return L("Enter the code on GitHub", "在 GitHub 上输入验证码")
-        case .waitingForCompletion:
-            return L("Verifying account…", "正在验证账号…")
-        default:
-            return ""
-        }
+    private var kiroLoginSection: some View {
+        ProviderLoginStatusCard(
+            state: loginVisualState(kiroLogin.phase),
+            title: L("Sign in with AWS Builder ID", "使用 AWS Builder ID 登录"),
+            description: L("AIUsage opened the AWS Builder ID page in your browser. Confirm there and the account connects automatically.",
+                           "已在浏览器打开 AWS Builder ID 授权页，确认后自动接入。"),
+            deviceCode: kiroLogin.userCode,
+            deviceCodePrompt: kiroLogin.codeIsPrefilled
+                ? L("Check that the page shows this code, then confirm:", "核对页面上的验证码与此一致后确认：")
+                : L("Enter this code on the sign-in page:", "在登录页面输入此验证码："),
+            accountBadge: kiroLogin.accountEmail,
+            inProgressLabel: devicePhaseLabel(kiroLogin.phase, waiting: L("Waiting for approval in your browser", "等待在浏览器中授权")),
+            connectingLabel: connectingLabel,
+            succeededLabel: L("Kiro sign-in completed", "Kiro 登录已完成"),
+            reopen: kiroLogin.verificationURL == nil ? nil : ProviderLoginAction(title: L("Open Browser Again", "重新打开浏览器")) {
+                kiroLogin.reopenInBrowser()
+            },
+            cardMinHeight: 0
+        )
     }
 
-    var antigravityPhaseLabel: String {
-        switch antigravityLogin.phase {
-        case .launching:
-            return L("Preparing Google sign-in…", "正在准备 Google 登录…")
-        case .waitingForBrowser:
-            return L("Finish the browser sign-in", "请完成浏览器登录")
-        case .waitingForCompletion:
-            return L("Waiting for Google callback…", "正在等待 Google 回调…")
-        default:
-            return ""
-        }
-    }
-
-    var geminiPhaseLabel: String {
-        switch geminiLogin.phase {
-        case .launching:
-            return L("Preparing Google sign-in…", "正在准备 Google 登录…")
-        case .waitingForBrowser:
-            return L("Finish the browser sign-in", "请完成浏览器登录")
-        case .waitingForCompletion:
-            return L("Waiting for Google callback…", "正在等待 Google 回调…")
-        default:
-            return ""
+    private func devicePhaseLabel(_ phase: LoginPhase, waiting: String) -> String {
+        switch phase {
+        case .launching: return L("Preparing sign-in…", "正在准备登录…")
+        case .waitingForBrowser: return waiting
+        case .waitingForCompletion: return L("Verifying account…", "正在验证账号…")
+        default: return ""
         }
     }
 }
