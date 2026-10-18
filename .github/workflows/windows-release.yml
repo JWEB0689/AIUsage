@@ -33,7 +33,7 @@ jobs:
           ./scripts/build-windows-quotaserver.ps1
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: AIUsage-win64
           path: dist/AIUsage-win64.zip
